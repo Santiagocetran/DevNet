@@ -195,6 +195,33 @@ https://signal.group/#CjQKICVqJ0Ri3KGCZOsf8A3dhmg8GC_vc1MBmBrq0JV7lIr6EhBCOwElVH
 
 ---
 
+# Faucet Access (Sepolia Optimism)
+
+To participate in the Infinite Zero Network devnet, you will need Sepolia Optimism ETH for transaction fees.
+
+You can request Sepolia Optimism ETH from the following faucets:
+
+Here’s a more polished and professional version:
+
+---
+
+## Faucet Access (Sepolia Optimism)
+
+To participate in the Infinite Zero Network devnet, you will need Sepolia Optimism ETH for transaction fees.
+
+You can request testnet tokens from the following official faucets:
+
+* [Optimism Faucet](https://console.optimism.io/faucet)
+* [Chainlink Faucet (Optimism Sepolia)](https://faucets.chain.link/optimism-sepolia)
+* [LearnWeb3 Faucet](https://learnweb3.io/faucets/optimism_sepolia/)
+* [ETHGlobal OP Sepolia Faucet](https://ethglobal.com/faucet/op-sepolia-11155420)
+* [Alchemy Optimism Sepolia Faucet](https://www.alchemy.com/faucets/optimism-sepolia)
+
+If you are unable to obtain funds through the faucets above, you may also request Sepolia Optimism ETH through the Infinite Zero Foundation Telegram and Signal community groups.
+
+---
+
+
 # ⚙️ DIN CLI Installation and Setup
 
 Before participating, ensure dincli is correctly installed and configured.
