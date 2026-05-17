@@ -1,45 +1,45 @@
 # Contributing to DevNet
 
-Thank you for your interest! Here's how you can help:
+InfiniteZero is an open experiment. The DevNet is live, assumptions are being tested in real conditions, and there's real work to do. If you want to help build a global AI commons — this is where it happens.
 
 ## Getting Started
-- Fork the repo
-- checkout to `develop` branch
-- install dependencies
-- Set up the development environment (see `/Developer/DEVELOPMENT_SETUP.md`)
-- run `pip install -e .` to install dincli in editable mode
-- Create a feature branch
-- Commit your changes
-- Create a pull request to `develop` branch
 
-## Clarification
+```bash
+# Fork the repo and checkout develop
+git checkout develop
 
-The documents in [devnet/Developer](./) are intended to provide ideas for possible roadmap directions, parameters, workflows, and architecture. They are not strict specifications, and nothing in that folder should be treated as fixed or final by default.
+# Install dependencies and set up dincli in editable mode
+pip install -e .
 
-Contributors are encouraged to challenge assumptions, question tradeoffs, and propose alternatives when they see a better path. A good contribution can refine the current direction, replace it with a stronger one, or explain why an existing idea should be reconsidered.
+# See full setup guide
+/Developer/DEVELOPMENT_SETUP.md
+```
 
-In practice, treat the `Developer/` materials as working design input:
+Create a feature branch, commit your changes, and open a pull request to `develop`.
 
-- useful for understanding current thinking
-- helpful for identifying gaps and opportunities
-- open to revision as implementation and research evolve
+## A note on the Developer docs
 
-## Types of Contributions
-- **Bug fixes** - See open issues
-- **Documentation** - Help expand our guides
-- **Smart contracts** (Solidity) - Add new features or security improvements
-- New Features 
-- Improve Services
-- Improve Security
-- **Python tooling** - Enhance dincli or validators
-- **Testing** - Improve test coverage
+The materials in `/Developer` are working design input — not fixed specifications. They represent current thinking, not final decisions.
+
+Good contributors challenge assumptions, question tradeoffs, and propose alternatives. If you see a better path, say so. The goal is the right architecture, not defending the existing one.
+
+## Ways to contribute
+
+**Bug fixes** — see open issues
+**Smart contracts** (Solidity) — new features, security improvements
+**Python tooling** — enhance dincli or validator tooling
+**Documentation** — expand guides, improve clarity
+**Testing** — improve coverage
+**Research** — DP integration, contribution scoring, validator economics
 
 ## Submitting PRs
-1. Reference related issues
-2. Provide clear description
-3. Add tests if applicable
-4. Keep commits focused
 
-## Code Standards
-- Python: Follow PEP 8
-- Solidity: Use community standards, include natspec comments
+- Reference related issues
+- Clear description of what and why
+- Add tests where applicable
+- Keep commits focused
+
+## Code standards
+
+Python: PEP 8
+Solidity: community standards, natspec comments throughout
