@@ -53,8 +53,23 @@ Important current behavior:
 - validators are considered active through `isValidatorActive(...)`
 - `DINTaskCoordinator.sol` and `DINTaskAuditor.sol` gate registration on active-validator status
 - batch assignment currently relies on registered validator pools plus local shuffle logic
+- Slashed tokens remain in the contract instead of being burned or reallocated.
+- Blacklisted funds currently have no separate governance-managed withdrawal path.
 
 That means DIN has a base staking contract, but it does not yet have the complete infrastructure implied by the roadmap.
+
+### Current Lifecycle Controls vs. Gaps
+
+The current `DinValidatorStake.sol` contract contains the structural shell for validator states (`None`, `Active`, `Exiting`, `Jailed`, and `Blacklisted` in the `ValidatorStatus` enum and `ValidatorInfo` struct), but lacks functional controls for temporary suspensions (jailing/suspension periods), explicit reactivation, and permanent bans (tombstoning).
+
+The table below details what is currently implemented in `DinValidatorStake.sol` versus what remains to be implemented:
+
+| Feature / Control | Current Implementation | Remaining Work (Proposed) |
+|---|---|---|
+| **Temporary Suspension (Jailing)** | `Jailed` status and `jailedUntil` timestamp exist in the data model and status sync. | Functionality to trigger jailing is missing. Need `jailValidator(address, uint64)` function for slasher/coordinator contracts. |
+| **Suspension Periods** | `jailedUntil` timestamp restricts status sync while in the future. | No dynamic suspension configurations or rules on how jail durations scale with repeated offenses. |
+| **Reactivation Flow** | Status automatically changes on the next state-modifying call once `jailedUntil` expires. | Needs an explicit `reactivate()` / `unjail()` transaction sent by the operator to verify node readiness before returning to `Active`. |
+| **Permanent Banishment (Tombstoning)** | None. (Blacklisting is administrative and fully reversible). | Needs a `Tombstoned` status, a permanent ban flag, a `tombstoneValidator(address)` function, and strict enforcement that blocks any reactivation. |
 
 Main current gaps:
 
@@ -142,6 +157,13 @@ Recommended `v1` contract rules:
 - minimum stake and unbonding period should be configurable storage if governance tuning is expected soon, or constants only if the team accepts another migration later
 - if a validator is blacklisted, funds may remain trapped in `v1` until governance introduces a dedicated confiscation and treasury-routing flow
 
+### Contract Ownership and Governance
+
+To ensure protocol security and administrative flexibility, the `v1` validator staking contract will incorporate an owner-controlled access model:
+
+- **Initial Deployment Model:** In the current deployment model, ownership is held by the DIN admin / DIN-Representative to allow for rapid parameter tuning and emergency response.
+- **Future Governance Path:** Later, ownership can be transferred to a DAO governance executor or a timelocked administrative address to decentralize control.
+
 ### Future Governance Extension
 
 Once DAO governance is in place, the staking system should add a governance-only confiscation path for permanently blacklisted funds:
@@ -154,6 +176,72 @@ Once DAO governance is in place, the staking system should add a governance-only
 - should emit a dedicated event so indexers can distinguish confiscation from ordinary slashing
 
 This should be treated as a separate governance action from blacklisting itself. Blacklisting freezes validator funds and participation immediately; confiscation is the later treasury-transfer step that happens only if governance approves it.
+
+### Proposed Lifecycle Enhancements: Jailing, Reactivation, and Tombstoning
+
+To address the gaps in validator lifecycle management, the following architecture is proposed for implementation in `DinValidatorStake.sol`.
+
+#### A. Tombstoning in Staking Context
+In proof-of-stake protocols (such as Cosmos, Ethereum, or Polkadot), **Tombstoning** is an irreversible status transition reserved for severe, consensus-threatening protocol infractions (e.g., double-signing blocks, submitting conflicting audits, or malicious protocol forks). Unlike temporary suspensions (jailing) or administrative holds (blacklisting), tombstoning is permanent. The validator address is permanently locked out of consensus, and all staking/claiming operations are disabled.
+
+##### Pros and Cons of Tombstoning:
+
+| Pros | Cons |
+|---|---|
+| **Equivocation Protection**: Prevents malicious validators from immediately re-staking with the same compromised key. | **Irreversible Key Loss**: Operational or software configuration errors (e.g., duplicate nodes) permanently ruin the address with no way to recover. |
+| **Double-Slashing Prevention**: Immediately and permanently removes the offender from the active pool, preventing redundant slashing updates. | **Complicates Leftover Fund Claims**: If the protocol does not confiscate 100% of the stake, writing a safe way to claim remaining funds without reactivation is complex. |
+| **Clarity of Security State**: Distinguishes administrative/governance interventions (blacklisting) from protocol-level security offenses. | **Governance Bypass**: If implemented strictly on-chain, even DAO governance cannot restore an accidentally tombstoned validator. |
+
+##### How to Implement Tombstoning in `DinValidatorStake.sol`:
+1. **Extend the Status Enum**: Add `Tombstoned` to the `ValidatorStatus` enum.
+2. **Add Tombstone Check Modifier**: Create a modifier `notTombstoned(address validator)` that reverts if `validators[validator].status == ValidatorStatus.Tombstoned`. Apply this to `stake()`, `unstake()`, `claimUnstaked()`, and `blacklistValidator()`.
+3. **Implement Tombstone Function**: Create a function only callable by authorized slashers or consensus coordinators:
+   ```solidity
+   function tombstoneValidator(address validator, bytes32 reason) external onlySlasherContract nonReentrant {
+       ValidatorInfo storage info = validators[validator];
+       info.status = ValidatorStatus.Tombstoned;
+       
+       // Slash a severe penalty (e.g. 100% of active & pending stake)
+       uint256 slashAmount = info.activeStake + info.pendingWithdrawals;
+       if (slashAmount > 0) {
+           info.activeStake = 0;
+           info.pendingWithdrawals = 0;
+           info.withdrawAvailableAt = 0;
+       }
+       emit ValidatorTombstoned(validator, slashAmount, reason);
+   }
+   ```
+4. **Make Tombstoning Sticky**: Ensure `_syncValidatorStatus()` and `unblacklistValidator()` cannot overwrite the `Tombstoned` status. Once marked, the validator remains permanently tombstoned.
+
+#### B. Jailing and Suspension Flow
+Currently, the contract defines `Jailed` but offers no way to put a validator in jail or pull them out cleanly.
+
+##### Proposed Implementation:
+- **Jail Call**:
+  ```solidity
+  function jailValidator(address validator, uint64 duration, bytes32 reason) external onlySlasherContract {
+      ValidatorInfo storage info = validators[validator];
+      if (info.status == ValidatorStatus.Blacklisted || info.status == ValidatorStatus.Tombstoned) revert InvalidStatus();
+      
+      info.jailedUntil = uint64(block.timestamp + duration);
+      info.status = ValidatorStatus.Jailed;
+      emit ValidatorJailed(validator, info.jailedUntil, reason);
+  }
+  ```
+- **Explicit Reactivation Flow**:
+  Rather than automatically restoring a validator on status sync, node operators should call `reactivate()` to ensure they are ready to participate again. This prevents a node from being assigned work while still misconfigured or offline.
+  ```solidity
+  function reactivate() external nonReentrant {
+      ValidatorInfo storage info = validators[msg.sender];
+      if (info.status != ValidatorStatus.Jailed) revert ValidatorNotJailed();
+      if (block.timestamp < info.jailedUntil) revert JailPeriodNotExpired();
+      if (info.activeStake < MIN_STAKE) revert NotEnoughStake();
+      
+      info.status = ValidatorStatus.Active;
+      _syncValidatorStatus(info);
+      emit ValidatorReactivated(msg.sender);
+  }
+  ```
 
 ### Registry Integration Requirements
 
@@ -271,6 +359,11 @@ This keeps the initial implementation compatible with the current codebase while
 - should validator rotation be hard-enforced on-chain or left to coordinator policy plus observable fairness tests?
 - once DAO governance is live, should `confiscateBlacklistedStake(...)` permit partial confiscation, full confiscation only, or both?
 - which treasury address should receive confiscated blacklisted stake after a successful governance proposal?
+- **Tombstoning and Jailing questions**:
+  - Who has authority to trigger `tombstoneValidator` (only specialized slasher contracts, consensus engines, or direct owner/governance actions)?
+  - Should tombstoned validators be slashed for 100% of their stake immediately, or should a portion be reclaimable by the operator after an unbonding period (e.g., to prevent total asset loss on accidental software misconfigurations)?
+  - How do we handle accidental tombstoning if it is irreversible on-chain? Should we provide a governance-override capability despite standard immutability?
+  - What are the default suspension durations for liveness jailing, and should they scale exponentially for repeat offenses (e.g., 1 day, then 3 days, then 7 days)?
 
 ## Done Criteria
 

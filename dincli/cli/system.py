@@ -832,9 +832,9 @@ def configure_ipfs(ctx: typer.Context,
 
     save_config(config)
 
-    ctx.obj.console.print(f"[green]IPFS provider is now: {selected_provider}[/green]")
+    ctx.obj.console.print(f"[green] ✅ Current IPFS provider: {selected_provider}[/green]")
     if selected_provider == "env":
-        ctx.obj.console.print("[cyan]Runtime source:[/cyan] `IPFS_API_URL_ADD` and `IPFS_API_URL_RETRIEVE` from the current shell or .env")
+        ctx.obj.console.print("[cyan] IPFS Runtime source:[/cyan] `IPFS_API_URL_ADD` and `IPFS_API_URL_RETRIEVE` from the current shell or .env")
     elif selected_provider == "filebase":
         ctx.obj.console.print("[cyan]Runtime source:[/cyan] Filebase RPC API token stored in dincli config")
     elif selected_provider == "custom":
