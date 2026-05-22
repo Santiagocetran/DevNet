@@ -23,14 +23,11 @@ def train_lms(
 
     taskCoordinator_contract, taskAuditor_contract = ctx.obj.get_deployed_din_task_coordinator_contract(True, model_id), ctx.obj.get_deployed_din_task_auditor_contract(True, model_id)
     runtime = ctx.obj.build_service_runtime(role="client", model_id=model_id)
-    dpmode = runtime.get_manifest_key("dp_mode", "disabled")
-
     current_GI, current_GIstate = ctx.obj.get_current_gi_and_state(taskCoordinator_contract)
 
     ctx.obj.validate_gi_ET_curr_GI(gi, current_GI)
 
     console.print("Training local model")
-    console.print("Using DpMode: ", dpmode)
 
     genesis_model_ipfs_hash_raw = taskCoordinator_contract.functions.genesisModelIpfsHash().call()
     genesis_model_ipfs_hash = get_cid_from_bytes32(genesis_model_ipfs_hash_raw.hex())

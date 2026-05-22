@@ -4,7 +4,13 @@
 
 This issue covers improvements to the differential privacy pipeline used by Infinite Zero Network during local client training and update submission.
 
-The current implementation already introduces basic clipping and Gaussian noise, but it is still closer to a proof of concept than a production-ready privacy layer. The next step is to make differential privacy a configurable capability exposed through `dincli`, so model owners can choose a privacy strategy, tune its parameters, and generate service artifacts that match their deployment needs.
+The DevNet baseline in [client.py](/home/azureuser/projects/devnet/cache_model_0/services/client.py) now supports three manifest-driven DP mechanisms:
+
+- `post_training_gaussian`
+- `post_training_laplace`
+- `update_gaussian`
+
+That is still a starter privacy layer rather than a production-ready one. The next step is to keep improving the privacy math, accounting, and service-generation workflow while preserving a clean manifest-driven developer experience.
 
 ## manifest
 
@@ -12,55 +18,98 @@ The model manifest at [manifest.json](/home/azureuser/projects/devnet/cache_mode
 
 That means DP behavior should not be limited to hardcoded values inside `client.py`. A model owner should be able to place DP-related settings in the manifest and let services read them at runtime.
 
-Example manifest fields:
+Recommended manifest shape:
 
 ```json
 {
-  "dp_mode": "afterTraining",
-  "dp_sigma": 0.5,
-  "dp_clipping_norm": 1.0,
-  "dp_mechanism": "post_training_gaussian"
+  "dp": {
+    "enabled": true,
+    "mode": "afterTraining",
+    "mechanism": "post_training_gaussian",
+    "parameters": {
+      "clipping_norm": 1.0,
+      "noise_multiplier": 0.5,
+      "laplace_scale": 0.35,
+      "clip_scope": "per_layer"
+    }
+  }
 }
 ```
+
+The nested `dp` object is the current config surface for the DevNet client service.
 
 These parameters can be accessed inside services through the injected service runtime context:
 
 ```python
 
-# Example of how to access DP parameters in a service from manifest:
+# Example of how to resolve DP parameters in a service from manifest:
 
 def train_client_model_and_upload_to_ipfs(
     genesis_model_ipfs_hash,
     account_address,
     effective_network="local",
     initial_model_ipfs_hash=None,
-    dp_mode=None,
     model_base_dir="",
     gi=None,
     runtime=None,
 ):
-    if dp_mode is None and runtime is not None:
-        dp_mode = runtime.get_manifest_key("dp_mode", "disabled")
-    if dp_mode is None:
-        dp_mode = "disabled"
-
-    sigma = runtime.get_manifest_key("dp_sigma", 0.5) if runtime else 0.5
-    clipping_norm = runtime.get_manifest_key("dp_clipping_norm", 1.0) if runtime else 1.0
-    dp_mechanism = runtime.get_manifest_key("dp_mechanism", "post_training_gaussian") if runtime else "post_training_gaussian"
+    dp_config = resolve_dp_config(runtime=runtime)
 ```
 
 For example, a client service can resolve manifest-driven DP settings from `runtime` instead of hardcoding them or reloading manifest state manually:
 
 ```python
-if dp_mode == "afterTraining" and dp_mechanism == "post_training_gaussian":
-    noisy_state_dict = add_noise_and_clip_state_dict(
-        original_state_dict,
-        sigma,
-        clipping_norm,
+if dp_config["enabled"] and dp_config["mode"] == "afterTraining":
+    private_state_dict = apply_dp_mechanism(
+        trained_state_dict,
+        dp_config,
+        reference_state_dict=reference_state_dict,
     )
 ```
 
 This is why the runtime context was added: `dincli` resolves the manifest once for a service run, injects it into the service call, and lets service code read DP configuration through `runtime.get_manifest_key(...)`. That keeps privacy configuration in the manifest, makes service behavior easier to tune per model, and avoids coupling service code to CLI-side manifest lookup details.
+
+## Implemented DevNet Baseline
+
+Current behavior in [client.py](/home/azureuser/projects/devnet/cache_model_0/services/client.py):
+
+- `post_training_gaussian`: clips the final model weights and adds Gaussian noise tensor-by-tensor.
+- `post_training_laplace`: clips the final model weights and adds Laplace noise tensor-by-tensor.
+- `update_gaussian`: computes the local update relative to the starting model, clips that update, adds Gaussian noise, and reconstructs a full private weight file so the existing aggregator contract does not change.
+
+Supported parameters in the manifest today:
+
+- `clipping_norm`
+- `noise_multiplier`
+- `laplace_scale`
+- `clip_scope` with values `per_layer` or `global`
+
+Compatibility notes:
+
+- `dp.enabled: false` bypasses privacy and uploads the raw trained weights.
+- if the `dp` block is absent, privacy is treated as disabled.
+- `update_gaussian` uses the starting model for the round as its reference, which is the latest global model when one is available and the genesis model otherwise.
+
+## Sources And Lineage
+
+Current lineage for the DevNet client-side DP implementation:
+
+- The shipped implementation in [client.py](/home/azureuser/projects/devnet/cache_model_0/services/client.py) was written directly for this repository and is the authoritative source for the current behavior.
+- The manifest/runtime access pattern is based on the local `dincli` runtime context in [runtime.py](/home/azureuser/projects/devnet/dincli/services/runtime.py), not on an external DP library.
+- The current mechanisms use plain PyTorch tensor operations and do not directly vendor code from an external privacy library or from the data-valuation repositories below.
+
+Related research and repository references that informed the direction:
+
+- Threshold KNN-Shapley paper: <https://arxiv.org/abs/2308.15709>
+- Local checkout of TKNN-Shapley: [README.md](/home/azureuser/projects/gitrepos/TKNN-Shapley/README.md)
+- TKNN-Shapley privacy/accounting helpers: [helper_privacy.py](/home/azureuser/projects/gitrepos/TKNN-Shapley/helper_privacy.py) and [helper_knn.py](/home/azureuser/projects/gitrepos/TKNN-Shapley/helper_knn.py)
+- Datascope repository: [README.md](/home/azureuser/projects/gitrepos/datascope/README.md) and upstream repo <https://github.com/easeml/datascope>
+- Awesome Data Valuation list: [README.md](/home/azureuser/projects/gitrepos/awesome-data-valuation/README.md) and upstream repo <https://github.com/daviddao/awesome-data-valuation>
+
+The important boundary is this:
+
+- DevNet currently implements simple manifest-driven Gaussian/Laplace/update perturbation for local model submission.
+- TKNN-Shapley and the related valuation repositories were used as reference material for future privacy-aware contributivity and scoring work, not as direct drop-in code for this service.
 
 ## Why This Matters
 
@@ -108,21 +157,20 @@ Related integration points include:
 The current approach roughly does the following:
 
 1. Train the local model.
-2. Clip model weights.
-3. Add Gaussian noise.
-4. Upload the resulting weights.
+2. Resolve DP settings from the manifest/runtime.
+3. Apply the selected mechanism to either final weights or the local update.
+4. Upload a private `state_dict` that remains compatible with the current aggregator.
 
-Representative logic today looks like:
+Representative logic now looks like:
 
 ```python
-def add_noise(weights, sigma):
-    noise = torch.normal(0, sigma, size=weights.shape, device=weights.device)
-    return weights + noise
+dp_config = resolve_dp_config(runtime=runtime)
 
-def clip_weights(weights, S):
-    norm = torch.norm(weights)
-    factor = max(1.0, norm / S)
-    return weights / factor
+private_state_dict = apply_dp_mechanism(
+    model_architecture.state_dict(),
+    dp_config,
+    reference_state_dict=reference_state_dict,
+)
 ```
 
 ## Main Limitations
@@ -482,6 +530,25 @@ Federated learning frameworks:
 
 - Flower
 - FedML
+
+## Local Repo Scan Notes
+
+Relevant material found in `/home/azureuser/projects/gitrepos`:
+
+- [`TKNN-Shapley`](</home/azureuser/projects/gitrepos/TKNN-Shapley/README.md>) is the strongest local reference for privacy-aware data valuation. It includes:
+  - private threshold KNN-Shapley
+  - naively privatized KNN-Shapley
+  - subsampled Gaussian mechanisms
+  - RDP and PRV-based privacy accounting hooks in [`helper_knn.py`](</home/azureuser/projects/gitrepos/TKNN-Shapley/helper_knn.py>) and [`helper_privacy.py`](</home/azureuser/projects/gitrepos/TKNN-Shapley/helper_privacy.py>)
+- [`datascope`](</home/azureuser/projects/gitrepos/datascope/README.md>) is useful for scalable data valuation and KNN-Shapley context, but it is not a direct DP implementation in the checked-in code.
+- [`awesome-data-valuation`](</home/azureuser/projects/gitrepos/awesome-data-valuation/README.md>) is a curated research index that is helpful for contribution-scoring scenarios, especially where privacy, valuation, and federated workflows intersect.
+
+Concrete scenarios worth exploring next for Infinite Zero Network:
+
+- privacy-preserving contributivity scoring for local model submissions
+- validator-side scoring that uses a DP-friendly KNN or TKNN-style valuation stage
+- update subsampling plus privacy accounting for repeated rounds
+- combining private updates with future secure aggregation or robust aggregation logic
 
 ## Relevant Files
 
