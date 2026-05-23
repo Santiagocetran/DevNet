@@ -1,6 +1,6 @@
 # Contributing to DevNet
 
-InfiniteZero is an open experiment. The DevNet is live, assumptions are being tested in real conditions, and there's real work to do. If you want to help build a global AI commons — this is where it happens.
+InfiniteZero is an open experiment. The DevNet is live, assumptions are being tested in real conditions, and there's real work to do. If you want to help build a global AI commons, this is where it happens.
 
 ## Getting Started
 
@@ -17,20 +17,22 @@ pip install -e .
 
 Create a feature branch, commit your changes, and open a pull request to `develop`.
 
-## A note on the Developer docs
+## A Note On The Developer Docs
 
-The materials in `/Developer` are working design input — not fixed specifications. They represent current thinking, not final decisions.
+The materials in `/Developer` are working design input, not fixed specifications. They represent current thinking, not final decisions.
 
 Good contributors challenge assumptions, question tradeoffs, and propose alternatives. If you see a better path, say so. The goal is the right architecture, not defending the existing one.
 
-## Ways to contribute
+## Ways To Contribute
 
-**Bug fixes** — see open issues
-**Smart contracts** (Solidity) — new features, security improvements
-**Python tooling** — enhance dincli or validator tooling
-**Documentation** — expand guides, improve clarity
-**Testing** — improve coverage
-**Research** — DP integration, contribution scoring, validator economics
+**Bug fixes**: see open issues  
+**Smart contracts** (Solidity): new features, security improvements  
+**Python tooling**: enhance `dincli` or validator tooling  
+**Documentation**: expand guides, improve clarity  
+**Testing**: improve coverage  
+**Research**: DP integration, contribution scoring, validator economics
+
+For issue-specific contributor packets, review questions, and curated reading lists, start with [GOOD_FIRST_ISSUES.md](/home/azureuser/projects/devnet/Developer/GOOD_FIRST_ISSUES.md) and then open the detailed issue linked from there.
 
 ## Submitting PRs
 
@@ -39,7 +41,7 @@ Good contributors challenge assumptions, question tradeoffs, and propose alterna
 - Add tests where applicable
 - Keep commits focused
 
-## Code standards
+## Code Standards
 
-Python: PEP 8
-Solidity: community standards, natspec comments throughout
+Python: PEP 8  
+Solidity: community standards, nat-spec comments throughout

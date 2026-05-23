@@ -208,9 +208,9 @@ Primary local sources:
 Related research and reference repositories:
 
 - Threshold KNN-Shapley paper: <https://arxiv.org/abs/2308.15709>
-- TKNN-Shapley local checkout: [README.md](/home/azureuser/projects/gitrepos/TKNN-Shapley/README.md)
-- TKNN-Shapley privacy helpers: [helper_privacy.py](/home/azureuser/projects/gitrepos/TKNN-Shapley/helper_privacy.py)
-- TKNN-Shapley accounting logic: [helper_knn.py](/home/azureuser/projects/gitrepos/TKNN-Shapley/helper_knn.py)
+- TKNN-Shapley local checkout: [README.md](https://github.com/Jiachen-T-Wang/TKNN-Shapley/blob/main/README.md)
+- TKNN-Shapley privacy helpers: [helper_privacy.py](https://github.com/Jiachen-T-Wang/TKNN-Shapley/blob/main/helper_privacy.py)
+- TKNN-Shapley accounting logic: [helper_knn.py](https://github.com/Jiachen-T-Wang/TKNN-Shapley/blob/main/helper_knn.py)
 - Datascope upstream repo: <https://github.com/easeml/datascope>
 - Awesome Data Valuation upstream repo: <https://github.com/daviddao/awesome-data-valuation>
 

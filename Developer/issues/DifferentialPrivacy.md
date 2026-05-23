@@ -101,10 +101,10 @@ Current lineage for the DevNet client-side DP implementation:
 Related research and repository references that informed the direction:
 
 - Threshold KNN-Shapley paper: <https://arxiv.org/abs/2308.15709>
-- Local checkout of TKNN-Shapley: [README.md](/home/azureuser/projects/gitrepos/TKNN-Shapley/README.md)
-- TKNN-Shapley privacy/accounting helpers: [helper_privacy.py](/home/azureuser/projects/gitrepos/TKNN-Shapley/helper_privacy.py) and [helper_knn.py](/home/azureuser/projects/gitrepos/TKNN-Shapley/helper_knn.py)
-- Datascope repository: [README.md](/home/azureuser/projects/gitrepos/datascope/README.md) and upstream repo <https://github.com/easeml/datascope>
-- Awesome Data Valuation list: [README.md](/home/azureuser/projects/gitrepos/awesome-data-valuation/README.md) and upstream repo <https://github.com/daviddao/awesome-data-valuation>
+- TKNN-Shapley: [README.md](https://github.com/Jiachen-T-Wang/TKNN-Shapley/blob/main/README.md)
+- TKNN-Shapley privacy/accounting helpers: [helper_privacy.py](https://github.com/Jiachen-T-Wang/TKNN-Shapley/blob/main/helper_privacy.py) and [helper_knn.py](https://github.com/Jiachen-T-Wang/TKNN-Shapley/blob/main/helper_knn.py)
+- Datascope repository: [README.md](https://github.com/easeml/datascope/blob/main/README.md)
+- Awesome Data Valuation list: [README.md](https://github.com/daviddao/awesome-data-valuation/blob/main/README.md)
 
 The important boundary is this:
 
@@ -533,15 +533,15 @@ Federated learning frameworks:
 
 ## Local Repo Scan Notes
 
-Relevant material found in `/home/azureuser/projects/gitrepos`:
+Relevant material:
 
-- [`TKNN-Shapley`](</home/azureuser/projects/gitrepos/TKNN-Shapley/README.md>) is the strongest local reference for privacy-aware data valuation. It includes:
+- [`TKNN-Shapley`](<https://github.com/Jiachen-T-Wang/TKNN-Shapley/blob/main/README.md>) is the strongest local reference for privacy-aware data valuation. It includes:
   - private threshold KNN-Shapley
   - naively privatized KNN-Shapley
   - subsampled Gaussian mechanisms
-  - RDP and PRV-based privacy accounting hooks in [`helper_knn.py`](</home/azureuser/projects/gitrepos/TKNN-Shapley/helper_knn.py>) and [`helper_privacy.py`](</home/azureuser/projects/gitrepos/TKNN-Shapley/helper_privacy.py>)
-- [`datascope`](</home/azureuser/projects/gitrepos/datascope/README.md>) is useful for scalable data valuation and KNN-Shapley context, but it is not a direct DP implementation in the checked-in code.
-- [`awesome-data-valuation`](</home/azureuser/projects/gitrepos/awesome-data-valuation/README.md>) is a curated research index that is helpful for contribution-scoring scenarios, especially where privacy, valuation, and federated workflows intersect.
+  - RDP and PRV-based privacy accounting hooks in [`helper_knn.py`](<https://github.com/Jiachen-T-Wang/TKNN-Shapley/blob/main/helper_knn.py>) and [`helper_privacy.py`](<https://github.com/Jiachen-T-Wang/TKNN-Shapley/blob/main/helper_privacy.py>)
+- [`datascope`](<https://github.com/easeml/datascope/blob/main/README.md>) is useful for scalable data valuation and KNN-Shapley context, but it is not a direct DP implementation in the checked-in code.
+- [`awesome-data-valuation`](<https://github.com/daviddao/awesome-data-valuation/blob/main/README.md>) is a curated research index that is helpful for contribution-scoring scenarios, especially where privacy, valuation, and federated workflows intersect.
 
 Concrete scenarios worth exploring next for Infinite Zero Network:
 
@@ -579,3 +579,51 @@ It also supports a better developer experience where model owners can compose se
 4. Keep changes scoped and measurable.
 5. Add tests or documentation that explain the behavior you introduce.
 6. Submit a pull request with a concise summary of the privacy improvement and its trade-offs.
+
+## DP Expert Review Request
+
+For a dedicated differential privacy reviewer, the key asks are:
+
+- review the current code and documentation together;
+- assess how effective the implemented mechanisms are likely to be in practice;
+- explain the privacy versus utility tradeoff we should expect from each mechanism;
+- identify where different classes of models should use different privacy mechanisms.
+
+Important framing:
+
+- different kinds of models may need different privacy mechanisms;
+- a baseline that is acceptable for a small MNIST-style MLP may not be acceptable for CNNs, transformer-style models, recommender systems, sequence models, or embedding-heavy workloads;
+- the correct privacy layer may vary between weight-level, update-level, gradient-level, and optimizer-level mechanisms depending on the model and task.
+
+### Review Packet
+
+Please review these local files first:
+
+- [cache_model_0/services/client.py](/home/azureuser/projects/devnet/cache_model_0/services/client.py)
+- [cache_model_0/manifest.json](/home/azureuser/projects/devnet/cache_model_0/manifest.json)
+- [cache_model_0/services/aggregator.py](/home/azureuser/projects/devnet/cache_model_0/services/aggregator.py)
+- [dincli/services/runtime.py](/home/azureuser/projects/devnet/dincli/services/runtime.py)
+- [dincli/cli/client.py](/home/azureuser/projects/devnet/dincli/cli/client.py)
+- [dincli/services/client.py](/home/azureuser/projects/devnet/dincli/services/client.py)
+- [tests/test_cache_client_dp.py](/home/azureuser/projects/devnet/tests/test_cache_client_dp.py)
+- [Documentation/technical/services/clients.md](/home/azureuser/projects/devnet/Documentation/technical/services/clients.md)
+- [Documentation/technical/manifest.md](/home/azureuser/projects/devnet/Documentation/technical/manifest.md)
+- [Developer/CONTRIBUTING.md](/home/azureuser/projects/devnet/Developer/CONTRIBUTING.md)
+
+Useful reference material:
+
+- Threshold KNN-Shapley paper: <https://arxiv.org/abs/2308.15709>
+- [TKNN-Shapley README](https://github.com/Jiachen-T-Wang/TKNN-Shapley/blob/main/README.md)
+- [TKNN-Shapley helper_privacy.py](https://github.com/Jiachen-T-Wang/TKNN-Shapley/blob/main/helper_privacy.py)
+- [TKNN-Shapley helper_knn.py](https://github.com/Jiachen-T-Wang/TKNN-Shapley/blob/main/helper_knn.py)
+- <https://github.com/easeml/datascope>
+- <https://github.com/daviddao/awesome-data-valuation>
+
+### Questions For The Reviewer
+
+- Which of the three implemented mechanisms are useful enough to keep?
+- Which of them should be treated only as temporary baselines?
+- Which model classes likely need different privacy mechanisms entirely?
+- How should we evaluate privacy effectiveness in a way that is honest and reproducible?
+- What utility metrics should we track alongside privacy settings?
+- What should be prioritized next: accountant integration, DP-SGD, adaptive clipping, update privatization, or privacy-aware scoring?
