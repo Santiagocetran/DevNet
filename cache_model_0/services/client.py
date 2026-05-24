@@ -415,7 +415,12 @@ def train_client_model_and_upload_to_ipfs(
     # Load the serialized model object, not just a raw state_dict. This matches
     # the existing DevNet model-owner flow where the genesis artifact is saved
     # as a full model object.
-    model_architecture = torch.load(model_base_dir / "models" / "genesis_model.pth", weights_only=False)
+
+    model_architecture = ModelArchitecture()
+
+    genesis_model = torch.load(model_base_dir / "models" / "genesis_model.pth", weights_only=True)
+    model_architecture.load_state_dict(genesis_model)
+
     console.print(
         "Genesis model with IPFS hash "
         + genesis_model_ipfs_hash
