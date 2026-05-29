@@ -109,7 +109,7 @@ Related research and repository references that informed the direction:
 The important boundary is this:
 
 - DevNet currently implements simple manifest-driven Gaussian/Laplace/update perturbation for local model submission.
-- TKNN-Shapley and the related valuation repositories were used as reference material for future privacy-aware contributivity and scoring work, not as direct drop-in code for this service.
+- TKNN-Shapley and the related valuation repositories were used as reference material for DP accounting hooks. Note that TKNN-Shapley itself is rejected for client model scoring due to FL privacy constraints (see [Rejected Ideas: TKNN-Shapley](../rejected-ideas/tknn-shapley.md)).
 
 ## Why This Matters
 
@@ -535,7 +535,7 @@ Federated learning frameworks:
 
 Relevant material:
 
-- [`TKNN-Shapley`](<https://github.com/Jiachen-T-Wang/TKNN-Shapley/blob/main/README.md>) is the strongest local reference for privacy-aware data valuation. It includes:
+- [`TKNN-Shapley`](<https://github.com/Jiachen-T-Wang/TKNN-Shapley/blob/main/README.md>) (Rejected for client model scoring, but remains a reference for privacy-aware data valuation). It includes:
   - private threshold KNN-Shapley
   - naively privatized KNN-Shapley
   - subsampled Gaussian mechanisms
@@ -545,8 +545,7 @@ Relevant material:
 
 Concrete scenarios worth exploring next for Infinite Zero Network:
 
-- privacy-preserving contributivity scoring for local model submissions
-- validator-side scoring that uses a DP-friendly KNN or TKNN-style valuation stage
+- privacy-preserving contributivity scoring for local model submissions (e.g., using leave-one-out or model-only updates)
 - update subsampling plus privacy accounting for repeated rounds
 - combining private updates with future secure aggregation or robust aggregation logic
 
@@ -610,7 +609,7 @@ Please review these local files first:
 - [Documentation/technical/manifest.md](/home/azureuser/projects/devnet/Documentation/technical/manifest.md)
 - [Developer/CONTRIBUTING.md](/home/azureuser/projects/devnet/Developer/CONTRIBUTING.md)
 
-Useful reference material:
+Useful reference material (Note: TKNN-Shapley is rejected for client model scoring due to FL privacy constraints - see [Rejected Ideas: TKNN-Shapley](../rejected-ideas/tknn-shapley.md)):
 
 - Threshold KNN-Shapley paper: <https://arxiv.org/abs/2308.15709>
 - [TKNN-Shapley README](https://github.com/Jiachen-T-Wang/TKNN-Shapley/blob/main/README.md)

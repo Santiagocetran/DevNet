@@ -55,7 +55,7 @@ Examples:
 
 - leave-one-out contribution
 - post-aggregation marginal utility
-- client-level or shard-level TKNN-Shapley
+- (Rejected: client-level or shard-level TKNN-Shapley - see [Rejected Ideas: TKNN-Shapley](../rejected-ideas/tknn-shapley.md))
 
 ### 3. Screening and anomaly scoring
 
@@ -109,16 +109,9 @@ belong.
 
 ### 5. Data-quality or privacy-sensitive scenario
 
-This is where TKNN-Shapley fits best.
+In settings where client data privacy is relaxed and raw training data is shared, TKNN-Shapley could be used for data-quality diagnostics and contribution estimation. However, under standard Federated Learning constraints where clients do not share raw training data, TKNN-Shapley is rejected as it cannot execute.
 
-The `TKNN-Shapley` analysis is useful for:
-
-- mislabeled-data detection
-- noisy-data detection
-- shard or client data-quality ranking
-- privacy-friendlier contribution estimation
-
-It is not the right direct replacement for the current auditor holdout score. It is best used as a contribution or data-valuation backend, not as the only model-admission signal.
+See [Rejected Ideas: TKNN-Shapley](../rejected-ideas/tknn-shapley.md) for details.
 
 ## Key Decisions
 
@@ -158,16 +151,11 @@ For admission scoring, DIN should prefer:
 - trimmed mean;
 - explicit agreement or variance checks.
 
-### 5. TKNN-Shapley should be scoped to the right scenarios
+### 5. TKNN-Shapley is Rejected for Federated Settings
 
-In DIN, TKNN-Shapley should primarily support:
+Because the auditor/validator does not have access to client training features and labels ($x_{train}, y_{train}$), TKNN-Shapley cannot run. It has been rejected from the design.
 
-- reward weighting;
-- client or shard quality diagnostics;
-- mislabeled or noisy data screening;
-- privacy-sensitive valuation experiments.
-
-It should not be introduced as the default replacement for the current MNIST-style holdout scorer.
+See [Rejected Ideas: TKNN-Shapley](../rejected-ideas/tknn-shapley.md) for details.
 
 ## Recommended DevNet Default
 
@@ -178,12 +166,11 @@ For the current `mnist-digits` style path, the recommended near-term scoring mod
 - utility metrics: accuracy, loss, macro-F1, baseline delta
 - aggregation: median utility plus variance bound
 - approval: `eligible && utility >= threshold && disagreement <= bound`
-
-TKNN-Shapley should be added later for contribution and reward experiments, not for first-pass model admission.
+Alternative privacy-preserving contribution backends (e.g., leave-one-out) should be used instead.
 
 ## Deliverables In This Folder
 
-- [Design](scoring-mechanism/design.md): scoring planes, scenario matrix, policy schema, on-chain/off-chain split, and TKNN-Shapley placement
+- [Design](scoring-mechanism/design.md): scoring planes, scenario matrix, policy schema, on-chain/off-chain split, and TKNN-Shapley rejection
 - [Implementation Plan](scoring-mechanism/implementation.md): phased repo changes across manifest, services, CLI, contracts, and tests
 
 ## Definition Of Done
@@ -195,7 +182,7 @@ This issue is properly addressed when DIN can:
 - support labeled and no-label evaluation modes honestly;
 - submit compact score summaries plus off-chain metric bundles;
 - aggregate auditor outputs robustly;
-- plug in contribution backends such as leave-one-out or TKNN-Shapley without rewriting the whole audit flow.
+- plug in contribution backends such as leave-one-out without rewriting the whole audit flow.
 
 ## Out Of Scope For Initial Delivery
 
@@ -203,7 +190,7 @@ The first proper version does not need:
 
 - a full secure-aggregation validation network;
 - cryptographic guarantees for private client-reported metrics;
-- real-time TKNN-Shapley on every deep-learning round;
+- real-time contribution scoring on every deep-learning round;
 - fully automated reward redistribution logic.
 
 The immediate goal is to make scoring mode explicit, scenario-aware, and implementable in the current DevNet architecture.

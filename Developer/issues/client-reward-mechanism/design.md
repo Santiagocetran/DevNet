@@ -218,15 +218,13 @@ Estimates contribution by comparing aggregation with and without each client.
 
 Useful and intuitive, but can be expensive as client count grows.
 
-### `tknn_shapley`
+### `tknn_shapley` (Rejected)
 
-Useful for client or shard valuation, noisy-data diagnostics, and data-quality-sensitive rewards.
+Rejected due to FL privacy constraints. The validator/auditor does not have access to client training features/labels ($x_{train}, y_{train}$), which are required to compute distances. See [Rejected Ideas: TKNN-Shapley](../../rejected-ideas/tknn-shapley.md) for details.
 
-Should be opt-in and treated as a contribution backend, not an admission scorer.
+### `dp_tknn_shapley` (Rejected)
 
-### `dp_tknn_shapley`
-
-Privacy-sensitive extension for later experiments.
+Rejected for the same reasons as `tknn_shapley`.
 
 ## Reward Report
 

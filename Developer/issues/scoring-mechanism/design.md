@@ -14,7 +14,7 @@ The design goals are:
 - separate admission scoring from reward or contribution scoring;
 - support dataset-based and dataset-free flows without lying about what the score means;
 - keep rich metrics off-chain while making compact decisions on-chain;
-- give DIN a clean place to use TKNN-Shapley where data valuation is actually useful.
+- document rejected ideas (e.g., TKNN-Shapley) to ensure future iterations avoid incompatible valuation designs.
 
 ## Non-Goals
 
@@ -73,7 +73,7 @@ This answers:
 - how much useful signal did the client or shard contribute relative to others;
 - how should rewards, reputation, or diagnostics be weighted.
 
-This is where leave-one-out, marginal delta, and TKNN-Shapley belong.
+This is where leave-one-out and marginal delta belong (TKNN-Shapley was rejected due to FL privacy constraints).
 
 ## Scenario Matrix
 
@@ -86,34 +86,19 @@ The protocol should select scoring mode from scenario, not from one default metr
 | regression | does the model reduce prediction error | MAE, RMSE, R2 | optional leave-one-out or marginal delta |
 | ranking or retrieval | does the model improve ranking quality | NDCG, MAP, recall@k | optional contribution on ranking delta |
 | no trusted labels | can the model be screened safely | conformance plus anomaly-only screening | reward disabled or weak heuristic |
-| data quality diagnostics | which clients or shards are noisy or mislabeled | keep admission separate | TKNN-Shapley or similar data-valuation backend |
-| privacy-sensitive contribution analysis | how can DIN value data without exposing raw examples | keep admission simple | DP-TKNN-Shapley or private shard valuation |
+| data quality diagnostics | which clients or shards are noisy or mislabeled | keep admission separate | leave-one-out or marginal delta (TKNN-Shapley rejected) |
+| privacy-sensitive contribution analysis | how can DIN value data without exposing raw examples | keep admission simple | private shard valuation (DP-TKNN-Shapley rejected) |
 
 This matrix is the core reason DIN should not keep a one-size-fits-all `accuracy` path.
 
-## Where TKNN-Shapley Fits
+## Why TKNN-Shapley is Rejected
 
-The `TKNN-Shapley` report is useful, but it solves a different problem from the current auditor score.
+TKNN-Shapley is completely incompatible with the Federated Learning setting used in DIN. 
 
-The report shows strong fit for:
+1. **Privacy Violation**: TKNN-Shapley requires direct, centralized access to training features and labels ($x_{train}, y_{train}$) to calculate pairwise distance bounds. Under FL constraints, this data is private and not shared with the auditor or coordinator.
+2. **Target Mismatch**: TKNN-Shapley evaluates the marginal contribution of *individual data points*, not local models or clients.
 
-- mislabeled-data detection;
-- noisy-data detection;
-- data-quality ranking;
-- privacy-friendlier valuation with differential privacy options.
-
-In DIN terms, that maps best to:
-
-- client or shard contribution scoring;
-- reward weighting;
-- dataset-quality diagnostics;
-- optional client-throttling or anomaly review.
-
-It does not map cleanly to:
-
-- direct auditor admission of a submitted model artifact using only a hidden holdout shard.
-
-That distinction matters. Otherwise DIN would force a data-valuation tool into a model-admission slot it was not built for.
+Thus, TKNN-Shapley is officially rejected for the DIN protocol. For a full breakdown of the technical mismatch, see the [TKNN-Shapley Rejection Document](../../rejected-ideas/tknn-shapley.md).
 
 ## Recommended Mode Library
 
@@ -130,8 +115,7 @@ DIN should define a small library of scoring modes instead of one hardcoded algo
 - `none`
 - `leave_one_out`
 - `marginal_global_delta`
-- `tknn_shapley`
-- `dp_tknn_shapley`
+- (Rejected: `tknn_shapley`, `dp_tknn_shapley` - see [Rejected Ideas: TKNN-Shapley](../../rejected-ideas/tknn-shapley.md))
 
 ### Aggregation modes for auditor reports
 
@@ -232,7 +216,7 @@ DIN should keep detailed evaluation data off-chain and only store compact summar
 - `scoring_policy` in manifest
 - `evaluationSpec` per batch or GI
 - full auditor metric bundle
-- optional contribution report or TKNN-Shapley output
+- optional contribution report output
 
 ### On-chain summaries
 
@@ -305,15 +289,12 @@ That avoids the architectural mistake of turning weak proxy signals into false p
 
 Contribution scoring should be a separate pipeline from admission scoring.
 
-### Simple backends
+### Supported backends
 
 - `leave_one_out`
 - `marginal_global_delta`
 
-### Advanced backends
-
-- `tknn_shapley`
-- `dp_tknn_shapley`
+*(Note: Advanced backends like `tknn_shapley` and `dp_tknn_shapley` have been rejected due to FL privacy constraints. See [Rejected Ideas: TKNN-Shapley](../../rejected-ideas/tknn-shapley.md) for details.)*
 
 ### Output form
 
@@ -348,11 +329,7 @@ Add:
 
 ### Later experimental extension
 
-Add:
-
-- `contribution_mode = tknn_shapley`
-
-but only for client or shard valuation, not as the base auditor admission score.
+Add other privacy-preserving contribution modes as needed, ensuring they do not leak client training data.
 
 ## Contract Direction
 

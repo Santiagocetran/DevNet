@@ -9,7 +9,7 @@ The right order is:
 1. move scoring policy into explicit configuration;
 2. widen the service and CLI interfaces so auditors can produce richer outputs;
 3. add compact `V2` contract storage for normalized summaries;
-4. add contribution backends such as leave-one-out and later TKNN-Shapley.
+4. add contribution backends such as leave-one-out.
 
 This preserves the current flow while removing the hardcoded assumptions that make it brittle.
 
@@ -53,7 +53,7 @@ Create one reusable scoring layer instead of scattering scoring rules across `au
 - normalize raw task metrics into a contract-friendly utility score;
 - calculate robust aggregates such as median or trimmed mean;
 - define typed result objects for eligibility, utility, anomaly, and contribution;
-- expose mode-specific evaluators such as `holdout_delta`, `screening_only`, and later `tknn_shapley`.
+- expose mode-specific evaluators such as `holdout_delta` and `screening_only`.
 
 ### Existing Files To Update
 
@@ -202,7 +202,7 @@ The contract should not parse:
 
 - accuracy versus F1 versus NDCG;
 - regression-specific formulas;
-- TKNN-Shapley raw internals.
+- raw contribution backend internals.
 
 Those stay off-chain. The contract should only consume normalized summaries.
 
@@ -242,10 +242,7 @@ Add reward-oriented contribution scoring without polluting the base admission pa
 - `leave_one_out`
 - `marginal_global_delta`
 
-### Later Backends
-
-- `tknn_shapley`
-- `dp_tknn_shapley`
+*(Note: `tknn_shapley` and `dp_tknn_shapley` were originally proposed but have been rejected due to FL privacy constraints. See [Rejected Ideas: TKNN-Shapley](../../rejected-ideas/tknn-shapley.md) for details.)*
 
 ### Important Scope Rule
 
@@ -255,22 +252,6 @@ These backends should produce:
 - client or local-model contribution scores
 
 They should not replace the base admission path for current holdout-evaluated tasks.
-
-### TKNN-Shapley Integration Guidance
-
-The report in [TKNN-Shapley_Analysis_Report.md](/home/azureuser/projects/output/TKNN-Shapley_Analysis_Report.md) suggests the right scenarios:
-
-- noisy or mislabeled client data detection;
-- client or shard quality ranking;
-- privacy-sensitive data valuation.
-
-That means the first DIN integration should target:
-
-- reward weighting experiments;
-- data-quality diagnostics;
-- optional governance or client-throttling reports.
-
-It should not be required for `v1` aggregation approval.
 
 ## Workstream 8: Model-Owner and Reward Consumers
 
@@ -312,7 +293,7 @@ Make the new scenario-driven model understandable for contributors and model own
 - document `evaluationSpec` artifacts;
 - document `V2` audit-result submission;
 - explain the difference between admission scoring and contribution scoring;
-- explain when TKNN-Shapley is appropriate and when it is not.
+- document why TKNN-Shapley was rejected (referencing [Rejected Ideas: TKNN-Shapley](../../rejected-ideas/tknn-shapley.md)).
 
 ## Workstream 10: Tests
 
@@ -340,15 +321,7 @@ Add tests under `tests/` for:
 - normalization from raw metrics to utility score;
 - robust aggregation helpers;
 - auditor-result object generation;
-- contribution backend interfaces.
-
-### TKNN-Shapley-Oriented Tests
-
-When the contribution backend is added, test:
-
-- client or shard ranking output shape;
-- deterministic report generation from fixed seeds;
-- explicit separation between admission and contribution outputs.
+- contribution backend interfaces (like leave-one-out and marginal delta).
 
 ## Suggested Delivery Phases
 
@@ -379,18 +352,10 @@ This is where the protocol stops being hardcoded to one scalar score.
 
 This is the phase that cleanly separates reward logic from admission logic.
 
-### Phase D: TKNN-Shapley Experiments
-
-- add optional `tknn_shapley` backend;
-- use it for client or shard valuation, noisy-data detection, and reward experiments;
-- keep it opt-in and off the critical admission path until validated.
-
-This is the right place to use the TKNN-Shapley work without distorting the base evaluator design.
-
-### Phase E: No-Label and Private Extensions
+### Phase D: No-Label and Private Extensions
 
 - add `screening_only` mode as a first-class path;
-- later explore private client-side metric aggregation or DP-TKNN-Shapley.
+- later explore private client-side metric aggregation.
 
 This is where DIN handles evaluation honesty in tasks with weak or absent labels.
 
@@ -416,4 +381,4 @@ The implementation is complete when:
 - auditor services return normalized summary results plus full metric bundles;
 - the contract accepts and finalizes richer `V2` audit results;
 - admission and contribution logic are separate;
-- DIN has a clean optional path for TKNN-Shapley-based contribution analysis.
+- DIN has a clean optional path for contribution analysis (like leave-one-out).

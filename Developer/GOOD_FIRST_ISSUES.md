@@ -95,7 +95,7 @@ Code and docs to review first:
 - [Documentation/technical/services/clients.md](/home/azureuser/projects/devnet/Documentation/technical/services/clients.md)
 - [Documentation/technical/manifest.md](/home/azureuser/projects/devnet/Documentation/technical/manifest.md)
 
-Related reference material:
+Related reference material (Note: TKNN-Shapley is rejected for client model scoring due to FL privacy constraints - see [Rejected Ideas: TKNN-Shapley](issues/../rejected-ideas/tknn-shapley.md)):
 
 - Threshold KNN-Shapley paper: <https://arxiv.org/abs/2308.15709>
 - [TKNN-Shapley README](https://github.com/Jiachen-T-Wang/TKNN-Shapley/blob/main/README.md)
