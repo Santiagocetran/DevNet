@@ -121,6 +121,28 @@ Relevant code paths:
 
 ---
 
+### 2. Client-Side Data Labeling & The Labeling Paradox
+
+**Difficulty:** Intermediate → Advanced  
+**Area:** Client Services & Tooling  
+**Detailed issue:** [issues/client-data-labeling.md](issues/client-data-labeling.md)  
+**Detailed tooling:** [tooling/client-labeling.md](tooling/client-labeling.md)
+
+Address the challenge of client-side data labeling where raw edge data is unlabeled but federated learning requires high-quality labeled datasets.
+
+Current focus areas:
+- implementing PyTorch-based semi-supervised consistency regularization (e.g., FixMatch) locally;
+- designing uncertainty/diversity active learning interfaces for client human-in-the-loop tagging;
+- building data staging, auto-labeling, and quality analytics into `dincli` and client services.
+
+#### Curated Review Packet
+- [Developer/issues/client-data-labeling.md](/home/azureuser/projects/devnet/Developer/issues/client-data-labeling.md)
+- [Developer/tooling/client-labeling.md](/home/azureuser/projects/devnet/Developer/tooling/client-labeling.md)
+- [cache_model_0/services/client.py](/home/azureuser/projects/devnet/cache_model_0/services/client.py)
+- [dincli/services/client.py](/home/azureuser/projects/devnet/dincli/services/client.py)
+
+---
+
 ## How To Contribute
 
 1. Pick an issue from this list
