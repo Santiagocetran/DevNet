@@ -7,6 +7,50 @@
    "Genesis_Model_CID":"bafybeiabvfkm46yerhp6ramctwdiqixzs472hekj2tj34x2q4hrhu777va",
    "DINTaskCoordinator_Contract":"0xB52A53a86Aec43Efc597EBdf338502ab8635c769",
    "DINTaskAuditor_Contract":"0xdB6259DD05A52D7b254763225Fc13cE852EFE3FA",
+   "scoring_policy": {
+      "spec_version": 1,
+      "scenario": "labeled_holdout_classification",
+      "admission_mode": "holdout_delta",
+      "contribution_mode": "none",
+      "fallback_mode": "screening_only",
+      "algorithms": {
+         "eligibility": "eligibility_anomaly_gate",
+         "utility": "holdout_delta_score",
+         "validator_aggregation": "legacy_mean_until_contract_v2"
+      },
+      "normalization": {
+         "contract_score_scale": "percent_0_100",
+         "utility_scale": "basis_points",
+         "max_utility": 10000
+      },
+      "eligibility_checks": {
+         "require_loadable_model": true,
+         "require_architecture_match": true,
+         "reject_nan_tensors": true,
+         "max_update_norm": 100.0,
+         "max_abs_weight": 100.0,
+         "min_eval_examples": 1
+      },
+      "evaluation": {
+         "batch_size": 32,
+         "dataset_mode": "legacy_testDataCID",
+         "metric_bundle_upload": "best_effort"
+      },
+      "metrics": {
+         "primary": ["accuracy", "loss", "macro_f1", "baseline_delta"],
+         "thresholds": {
+            "min_accuracy": 50.0,
+            "min_baseline_delta_bps": 0,
+            "max_anomaly_score_bps": 5000
+         }
+      },
+      "validator_consensus": {
+         "acceptance_rule": "legacy_contract_quorum",
+         "target_acceptance_rule_v2": "majority_vote",
+         "target_score_rule_v2": "median",
+         "max_disagreement_bps": 800
+      }
+   },
    "dp":{
       "enabled": false,
       "mode": "afterTraining",

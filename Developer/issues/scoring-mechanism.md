@@ -17,6 +17,10 @@ The protocol needs a scenario-driven scoring system where:
 3. contribution scoring is treated as a separate plane from admission scoring;
 4. no-label tasks fall back to screening rather than pretending to have a real performance score.
 
+The near-term DevNet decision is to score local model updates on the validator side, not client training samples. Validators receive local models or model deltas, run deterministic checks and validation evaluation, publish compact score reports, and the network aggregates validator reports with majority or median rules.
+
+TKNN-Shapley is not the right validator-side tool for this architecture. It values individual training samples and requires access to the client data points. DIN validators do not receive raw client samples, and the design should not add MPC, TEE, ZKP, or raw data disclosure just to make TKNN-Shapley executable. Its useful idea is marginal contribution, not the specific sample-level algorithm.
+
 ## Problem Restated
 
 The current stack is locked to one very specific path:
@@ -36,16 +40,22 @@ That creates three design failures:
 
 Scoring should be organized into three separate planes.
 
-### 1. Admission scoring
+### 1. Eligibility and admission barrier
 
 This decides whether a submitted local model is safe and useful enough to enter aggregation.
 
 Examples:
 
 - conformance checks
+- architecture and tensor-shape match
+- finite tensor values
+- bounded update norm
+- optional cosine or distance check against the consensus update
 - holdout utility score
 - baseline delta
 - auditor agreement bounds
+
+Local models that fail this barrier are not scored for reward and are not accepted into final aggregation.
 
 ### 2. Reward or contribution scoring
 
@@ -55,7 +65,8 @@ Examples:
 
 - leave-one-out contribution
 - post-aggregation marginal utility
-- (Rejected: client-level or shard-level TKNN-Shapley - see [Rejected Ideas: TKNN-Shapley](../rejected-ideas/tknn-shapley.md))
+- Monte-Carlo marginal gain over accepted updates
+- (Rejected for validator-side use: TKNN-Shapley, because validators do not have raw client samples)
 
 ### 3. Screening and anomaly scoring
 
@@ -111,7 +122,61 @@ belong.
 
 In settings where client data privacy is relaxed and raw training data is shared, TKNN-Shapley could be used for data-quality diagnostics and contribution estimation. However, under standard Federated Learning constraints where clients do not share raw training data, TKNN-Shapley is rejected as it cannot execute.
 
-See [Rejected Ideas: TKNN-Shapley](../rejected-ideas/tknn-shapley.md) for details.
+For DIN's current validator model, TKNN-Shapley can only be a client-side curation aid or an offline research diagnostic. It cannot be the production validator scoring mechanism.
+
+## Local Model Scoring Flow
+
+Validators should score a submitted local model update in four steps.
+
+### 1. First barrier: eligibility
+
+Before any expensive validation pass, each validator checks:
+
+- model loads successfully;
+- declared architecture, tensor names, shapes, and dtype match the task manifest;
+- tensors contain no NaN or Inf values;
+- update norm is below the task's configured cap;
+- update direction is not an obvious outlier against the round's consensus direction when enough candidate updates exist;
+- model artifact and metadata match the expected CID, signer, round, and task.
+
+This is a hard gate. A local model that fails eligibility is rejected before utility scoring.
+
+### 2. Admission score: utility delta on validation data
+
+For labeled tasks, the default validator score is the marginal utility of applying the local update to the current global model:
+
+```text
+score_i = metric(global_model + update_i, D_val) - metric(global_model, D_val)
+```
+
+The metric is policy-driven. MNIST-like classification can use accuracy, loss, macro-F1, and baseline delta. Imbalanced tasks should use balanced accuracy or macro-F1. Regression and ranking tasks should use their own metric families.
+
+The important detail is that validators should score the update's effect on the current global model, not a standalone local model in isolation.
+
+### 3. Fairness controls for validation shards
+
+A small validation shard is useful for DevNet, but it should not be treated as universally fair or fully general. To keep the score defensible:
+
+- use stratified sampling where labels exist;
+- rotate or resample validation shards across rounds;
+- publish `evaluationSpecCID` and `metricBundleCID` so results are auditable;
+- use multiple validators and median score aggregation;
+- include confidence, variance, or disagreement bounds;
+- keep no-label tasks in `screening_only` mode rather than inventing a performance score.
+
+The score is only as general as the evaluation spec. DIN should make that explicit instead of hiding it behind a single `passScore`.
+
+### 4. Final aggregation acceptance
+
+A local model update is accepted into final aggregation only if:
+
+- it passes eligibility;
+- its validator utility score clears the task threshold;
+- a validator majority accepts it;
+- the median validator score is within the configured disagreement bound;
+- any configured anomaly limits are satisfied.
+
+For MVP aggregation, accepted updates can be averaged using existing FL logic after clipping. For a more robust path, accepted updates should be aggregated with score weighting, coordinate-wise median, trimmed mean, or Krum-style selection depending on the task's threat model.
 
 ## Key Decisions
 
@@ -151,11 +216,21 @@ For admission scoring, DIN should prefer:
 - trimmed mean;
 - explicit agreement or variance checks.
 
-### 5. TKNN-Shapley is Rejected for Federated Settings
+### 5. TKNN-Shapley is Rejected for Validator-Side Federated Scoring
 
 Because the auditor/validator does not have access to client training features and labels ($x_{train}, y_{train}$), TKNN-Shapley cannot run. It has been rejected from the design.
 
-See [Rejected Ideas: TKNN-Shapley](../rejected-ideas/tknn-shapley.md) for details.
+The rejection is not because the paper is weak. It is because DIN's validator has model updates, not individual client samples. That is an information boundary, not an implementation gap.
+
+### 6. Required scoring algorithms for implementation
+
+The scoring module should implement at least three validator-side algorithms:
+
+1. `eligibility_anomaly_gate`: conformance, finite tensors, norm cap, and optional cosine-to-consensus screening.
+2. `holdout_delta_score`: validation-set utility delta against the current global model.
+3. `mc_marginal_gain_score`: sequential marginal contribution over accepted updates, averaged over random permutations when reward fairness matters.
+
+Cross-validator aggregation should then use majority vote for acceptance and median score for the final normalized score.
 
 ## Recommended DevNet Default
 
@@ -164,9 +239,11 @@ For the current `mnist-digits` style path, the recommended near-term scoring mod
 - scenario: `labeled_holdout_classification`
 - eligibility: loadability, architecture match, finite tensors, bounded update norm
 - utility metrics: accuracy, loss, macro-F1, baseline delta
-- aggregation: median utility plus variance bound
+- validator aggregation: majority accept plus median utility and disagreement bound
+- final model aggregation: only eligible, accepted updates; start with clipped averaging, then add robust update aggregation if poisoning pressure increases
 - approval: `eligible && utility >= threshold && disagreement <= bound`
-Alternative privacy-preserving contribution backends (e.g., leave-one-out) should be used instead.
+
+Differential privacy can be layered onto the update submission path. DP clipping aligns with the norm cap and limits each client's influence. DP noise reduces score sharpness, so the policy must tune privacy parameters so genuine gains remain above the validation noise floor.
 
 ## Deliverables In This Folder
 
