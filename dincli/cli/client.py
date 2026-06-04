@@ -4,7 +4,7 @@ from typing import Optional
 import typer
 from web3 import Web3
 
-from dincli.cli.utils import CACHE_DIR
+from dincli.cli.utils import CACHE_DIR, build_and_send_tx
 from dincli.services.client import train_client_model_and_upload_to_ipfs
 from dincli.services.cid_utils import get_bytes32_from_cid, get_cid_from_bytes32
 
@@ -82,26 +82,17 @@ def train_lms(
         )
 
     if submit:
-        console.print("Submitting local model with IPFS hash: ", client_model_ipfs_hash, "to task auditor")
-
         try:
             client_model_ipfs_hash_bytes32 = Web3.to_bytes(hexstr=get_bytes32_from_cid(client_model_ipfs_hash))
 
-            tx_params = ctx.obj.get_tx_params()
-            tx_params["gas"] = int(w3.eth.estimate_gas(taskAuditor_contract.functions.submitLocalModel(client_model_ipfs_hash_bytes32, current_GI).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-
-            tx = taskAuditor_contract.functions.submitLocalModel(client_model_ipfs_hash_bytes32, current_GI).build_transaction(tx_params)
-
-            signed_tx = account.sign_transaction(tx)
-            tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-            tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-
-            if tx_receipt.status == 1:
-                message = f" ✓ Local model submitted to task auditor with IPFS hash: {client_model_ipfs_hash}"
-                console.print(f"[bold green]{message}[/bold green]")
-            else:
-                message = f" ✗ Local model submission failed to task auditor with IPFS hash: {client_model_ipfs_hash}"
-                console.print(f"[bold red]{message}[/bold red]")
+            build_and_send_tx(
+                ctx,
+                taskAuditor_contract.functions.submitLocalModel(client_model_ipfs_hash_bytes32, current_GI),
+                f"Submitting local model with IPFS hash: {client_model_ipfs_hash} to task auditor",
+                f"Local model submitted to task auditor with IPFS hash: {client_model_ipfs_hash}",
+                f"Local model submission failed to task auditor with IPFS hash: {client_model_ipfs_hash}",
+                exit_on_failure=False
+            )
         except Exception as e:
             console.print(f"[bold red] Error submitting local model to task auditor: {e}[/bold red]")
 

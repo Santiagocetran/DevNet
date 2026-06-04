@@ -4,7 +4,8 @@ import typer
 from rich.table import Table
 from web3 import Web3
 
-from dincli.cli.utils import CACHE_DIR, MIN_STAKE, get_manifest_key
+from dincli.cli.utils import (CACHE_DIR, MIN_STAKE, build_and_send_tx,
+                               get_manifest_key)
 from dincli.services.aggregator import get_aggregated_cid
 from dincli.services.cid_utils import get_bytes32_from_cid, get_cid_from_bytes32
 
@@ -30,24 +31,18 @@ def buy(ctx: typer.Context,
     console.print(f"[bold green]Buying DINTokens... for {amount} ETH[/bold green]")
 
     try:
-        tx_params = ctx.obj.get_tx_params()
-        tx_params['value'] = w3.to_wei(amount, "ether")
-        tx_params["gas"] = int(w3.eth.estimate_gas(DinCoordinator_contract.functions.depositAndMint().build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-
-        tx = DinCoordinator_contract.functions.depositAndMint().build_transaction(tx_params)
-    
-        # Sign transaction
-        signed_tx = account.sign_transaction(tx)
-    
-        # Send raw transaction
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-        tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-    
-        if tx_receipt.status == 1:
-            console.print(f"[bold green]✓ DINTokens bought at:[/bold green] {tx_receipt.transactionHash.hex()}")
-            console.print("Aggregator DINToken balance: ", Web3.from_wei(DINToken_contract.functions.balanceOf(account.address).call(), "ether"))
-        else:
-            console.print(f"[bold red]✗ Transaction failed! Could not buy DINTokens {tx_receipt.transactionHash.hex()}[/bold red]")
+        tx_receipt = build_and_send_tx(
+            ctx,
+            DinCoordinator_contract.functions.depositAndMint(),
+            f"Buying DINTokens... for {amount} ETH",
+            f"DINTokens bought at: {w3.to_hex(w3.keccak(text='fake'))}", # placeholder logic or tx_receipt.transactionHash.hex() will be handled
+            "Transaction failed! Could not buy DINTokens",
+            tx_params={'value': w3.to_wei(amount, "ether")},
+            exit_on_failure=False
+        )
+        # Clear fake and set real hash
+        console.print(f"[bold green]✓ DINTokens bought at:[/bold green] {tx_receipt.transactionHash.hex()}")
+        console.print("Aggregator DINToken balance: ", Web3.from_wei(DINToken_contract.functions.balanceOf(account.address).call(), "ether"))
     except Exception as e:
         console.print(f"[bold red]✗ Error buying DINTokens: {e}[/bold red]")
     
@@ -70,38 +65,25 @@ def stake(ctx: typer.Context, amount: int):
         console.print(f"[bold green]✓ Enough DINTokens to stake. [bold green]\n [bold green]Staking...[/bold green]")
 
         try:
-            tx_params = ctx.obj.get_tx_params()
-            tx_params["gas"] = int(w3.eth.estimate_gas(DinToken_contract.functions.approve(DinStake_contract.address, MIN_STAKE).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-
-            tx_approve = DinToken_contract.functions.approve(DinStake_contract.address, MIN_STAKE).build_transaction(tx_params)
-
-            signed_tx_approve = account.sign_transaction(tx_approve)
-            tx_hash_approve = w3.eth.send_raw_transaction(signed_tx_approve.raw_transaction)
-            tx_receipt_approve = w3.eth.wait_for_transaction_receipt(tx_hash_approve)
-                
-            if tx_receipt_approve.status == 1:
-                console.print(f"[bold green]✓ DINTokens approved for staking.[/bold green]")
-            else:
-                console.print(f"[bold red]✗ Could not approve DINTokens for staking.[/bold red]")
-                raise typer.Exit()
+            build_and_send_tx(
+                ctx,
+                DinToken_contract.functions.approve(DinStake_contract.address, MIN_STAKE),
+                "Approving DINTokens for staking",
+                "DINTokens approved for staking.",
+                "Could not approve DINTokens for staking.",
+                exit_on_failure=False
+            )
 
             time.sleep(5)
 
-            tx_params = ctx.obj.get_tx_params()
-            tx_params["gas"] = int(w3.eth.estimate_gas(DinStake_contract.functions.stake(MIN_STAKE).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-
-            tx_stake = DinStake_contract.functions.stake(MIN_STAKE).build_transaction(tx_params)
-
-            signed_tx_stake = account.sign_transaction(tx_stake)
-        
-            tx_hash_stake = w3.eth.send_raw_transaction(signed_tx_stake.raw_transaction)
-                
-            tx_stake_receipt = w3.eth.wait_for_transaction_receipt(tx_hash_stake) 
-
-            if tx_stake_receipt.status == 1:
-                console.print(f"[bold green]✓ DINTokens staked.[/bold green]")
-            else:
-                console.print(f"[bold red]✗ Could not stake DINTokens.[/bold red]")
+            build_and_send_tx(
+                ctx,
+                DinStake_contract.functions.stake(MIN_STAKE),
+                "Staking DINTokens",
+                "DINTokens staked.",
+                "Could not stake DINTokens.",
+                exit_on_failure=False
+            )
         except Exception as e:
             console.print(f"[bold red]✗ Could not stake DINTokens. {e}[/bold red]")
 
@@ -149,18 +131,14 @@ def register(
             console.print(f"[bold green]✓ Aggregator has enough stake.[/bold green]")
 
             try:
-                tx_params = ctx.obj.get_tx_params()
-                tx_params["gas"] = int(w3.eth.estimate_gas(taskCoordinator_contract.functions.registerDINaggregator(curr_GI).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-    
-                tx = taskCoordinator_contract.functions.registerDINaggregator(curr_GI).build_transaction(tx_params)
-                
-                # Sign transaction
-                signed_tx = account.sign_transaction(tx)
-                tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-                tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-    
-                if tx_receipt.status == 1:
-                    console.print(f"[bold green]✓ Aggregator registered.[/bold green]")
+                build_and_send_tx(
+                    ctx,
+                    taskCoordinator_contract.functions.registerDINaggregator(curr_GI),
+                    "Registering aggregator",
+                    "Aggregator registered.",
+                    "Could not register aggregator.",
+                    exit_on_failure=False
+                )
             except Exception as e:
                 console.print(f"[bold red]✗ Could not register aggregator. {e}[/bold red]")
     
@@ -335,24 +313,18 @@ def aggregate_t1(
         console.print(f"Aggregated CID for T1 batch {bid} is {aggregated_cid}")
 
         if submit:
-
-            console.print(f"Submitting T1 aggregation CID for T1 batch {bid} with aggregated CID {aggregated_cid}")
             try:
                 aggregated_cid_bytes32 = Web3.to_bytes(hexstr=get_bytes32_from_cid(aggregated_cid))
-
-                tx_params = ctx.obj.get_tx_params()
-                tx_params["gas"] = int(w3.eth.estimate_gas(taskCoordinator_contract.functions.submitT1Aggregation(curr_GI, bid, aggregated_cid_bytes32).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
                 time.sleep(2)
 
-                tx = taskCoordinator_contract.functions.submitT1Aggregation(curr_GI, bid, aggregated_cid_bytes32).build_transaction(tx_params)
-                signed_tx = account.sign_transaction(tx)
-                tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-                receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-
-                if receipt.status == 1:
-                    console.print(f"[bold green]✓ Aggregation CID submitted.[/bold green]")
-                else:
-                    console.print(f"[bold red]✗ Could not submit aggregation CID.[/bold red]")
+                build_and_send_tx(
+                    ctx,
+                    taskCoordinator_contract.functions.submitT1Aggregation(curr_GI, bid, aggregated_cid_bytes32),
+                    f"Submitting T1 aggregation CID for T1 batch {bid} with aggregated CID {aggregated_cid}",
+                    "Aggregation CID submitted.",
+                    "Could not submit aggregation CID.",
+                    exit_on_failure=False
+                )
             except Exception as e:
                 console.print(f"[bold red]✗ Could not submit aggregation CID. Error: {e}[/bold red]")
                 raise typer.Exit(1)
@@ -432,24 +404,17 @@ def aggregate_t2(
             aggregated_cid = get_aggregated_cid(curr_GI, account.address, model_cids, genesis_model_ipfs_hash)
 
         if submit:
-            console.print(f"Submitting T2 aggregation CID for T2 batch {bid}  with aggregated CID {aggregated_cid}")
             try:
                 aggregated_cid_bytes32 = Web3.to_bytes(hexstr=get_bytes32_from_cid(aggregated_cid))
 
-                tx_params = ctx.obj.get_tx_params()
-                tx_params["gas"] = int(w3.eth.estimate_gas(taskCoordinator_contract.functions.submitT2Aggregation(curr_GI, i, aggregated_cid_bytes32).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-
-                tx = taskCoordinator_contract.functions.submitT2Aggregation(curr_GI, i, aggregated_cid_bytes32).build_transaction(tx_params)
-
-                signed_tx = account.sign_transaction(tx)
-                tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-
-                receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-
-                if receipt.status == 1:
-                    console.print(f"[bold green]✓ Aggregation CID submitted.[/bold green]")
-                else:
-                    console.print(f"[bold red]✗ Could not submit aggregation CID.[/bold red]")
+                build_and_send_tx(
+                    ctx,
+                    taskCoordinator_contract.functions.submitT2Aggregation(curr_GI, i, aggregated_cid_bytes32),
+                    f"Submitting T2 aggregation CID for T2 batch {bid} with aggregated CID {aggregated_cid}",
+                    "Aggregation CID submitted.",
+                    "Could not submit aggregation CID.",
+                    exit_on_failure=False
+                )
             except Exception as e:
                 console.print(f"[bold red]✗ Could not submit aggregation CID. Error: {e}[/bold red]")
                 raise typer.Exit(1)

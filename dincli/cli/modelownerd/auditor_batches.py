@@ -4,7 +4,7 @@ import typer
 from rich.table import Table
 from web3 import Web3
 
-from dincli.cli.utils import CACHE_DIR, get_manifest_key
+from dincli.cli.utils import CACHE_DIR, build_and_send_tx, get_manifest_key
 from dincli.services.modelowner import create_audit_testDataCIDs
 from dincli.services.cid_utils import get_bytes32_from_cid, get_cid_from_bytes32
 
@@ -29,21 +29,15 @@ def create(
     console.print(f"[bold green]Creating auditor batches [/bold green]")
 
     try:
-        tx_params = ctx.obj.get_tx_params()
-        tx_params["gas"] = int(w3.eth.estimate_gas(taskCoordinator_contract.functions.createAuditorsBatches(ref_gi).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-        tx = taskCoordinator_contract.functions.createAuditorsBatches(ref_gi).build_transaction(tx_params)
-
-        signed_tx = account.sign_transaction(tx)
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-
-        if receipt.status == 1:
-            console.print(f"[dim]Auditor batches created tx:[/dim] {tx_hash.hex()}")
-            console.print("[green]✓ Auditor batches created![/green]")
-        else:
-            console.print("[red]Error:[/red] Auditor batches creation failed")
-            raise typer.Exit(1) 
+        tx_receipt = build_and_send_tx(
+            ctx,
+            taskCoordinator_contract.functions.createAuditorsBatches(ref_gi),
+            "Creating auditor batches",
+            "Auditor batches created!",
+            "Auditor batches creation failed",
+            exit_on_failure=False
+        )
+        console.print(f"[dim]Auditor batches created tx:[/dim] {tx_receipt.transactionHash.hex()}")
     except Exception as e:
         console.print(f"[red]Error:[/red] {str(e)}")
         raise typer.Exit(1)
@@ -165,35 +159,24 @@ def create_testdataset(
                 test_cid_bytes32 = Web3.to_bytes(hexstr=get_bytes32_from_cid(audit_testDataCIDs[batch_id]))
 
                 time.sleep(5)
-                tx_params = ctx.obj.get_tx_params()
-                tx_params["gas"] = int(w3.eth.estimate_gas(taskauditor_contract.functions.assignAuditTestDataset(curr_GI, batch_id, test_cid_bytes32).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-                tx = taskauditor_contract.functions.assignAuditTestDataset(curr_GI, batch_id, test_cid_bytes32).build_transaction(tx_params)
-
-                signed_tx = account.sign_transaction(tx)
-                tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-                receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-                if receipt.status == 1:
-                    console.print("[green]✓ Test dataset assigned for auditor batch :", batch_id)
-                else:
-                    console.print("[red]Error:[/red] Failed to assign test dataset for auditor batch :", batch_id)
-                    raise typer.Exit(1)
-
+                build_and_send_tx(
+                    ctx,
+                    taskauditor_contract.functions.assignAuditTestDataset(curr_GI, batch_id, test_cid_bytes32),
+                    f"Assigning test dataset for auditor batch {batch_id}",
+                    f"Test dataset assigned for auditor batch : {batch_id}",
+                    f"Failed to assign test dataset for auditor batch : {batch_id}",
+                    exit_on_failure=False
+                )
 
             time.sleep(5)
-            tx_params = ctx.obj.get_tx_params()
-            tx_params["gas"] = int(w3.eth.estimate_gas(taskCoordinator_contract.functions.setTestDataAssignedFlag(curr_GI, True).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-            tx = taskCoordinator_contract.functions.setTestDataAssignedFlag(curr_GI, True).build_transaction(tx_params)
-            signed_tx = account.sign_transaction(tx)
-            
-            tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-
-            receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-
-            if receipt.status == 1:
-                console.print("[green]✓ Test dataset assigned for auditor batches[/green]")
-            else:
-                console.print("[red]Error:[/red] Failed to set test dataset assigned flag")
-                raise typer.Exit(1)
+            build_and_send_tx(
+                ctx,
+                taskCoordinator_contract.functions.setTestDataAssignedFlag(curr_GI, True),
+                "Setting test dataset assigned flag",
+                "Test dataset assigned for auditor batches",
+                "Failed to set test dataset assigned flag",
+                exit_on_failure=False
+            )
         except Exception as e:
             console.print(f"[red]Error:[/red] Failed to assign test dataset for auditor batches: {e}")
             raise typer.Exit(1)

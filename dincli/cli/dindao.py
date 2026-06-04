@@ -4,7 +4,8 @@ import time
 import typer
 
 from dincli.cli.contract_utils import get_contract_instance
-from dincli.cli.utils import get_env_key, load_din_info, save_din_info
+from dincli.cli.utils import (build_and_send_tx, get_env_key, load_din_info,
+                               save_din_info)
 
 app = typer.Typer(help="Commands for DIN DAO")
 
@@ -27,19 +28,13 @@ def din_coordinator(
     
     DINCoordinator_contract = get_contract_instance(artifact_path, effective_network)
     
-    tx_params = ctx.obj.get_tx_params()
-
-    tx_params["gas"] = int(w3.eth.estimate_gas(DINCoordinator_contract.constructor().build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-    
-    tx = DINCoordinator_contract.constructor().build_transaction(tx_params) 
-    
-    # Sign transaction
-    signed_tx = account.sign_transaction(tx)  
-    console.print(f"[bold green]Deploying DIN Coordinator Contract ...[/bold green]")
-   
-    # Send raw transaction
-    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-    tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+    tx_receipt = build_and_send_tx(
+        ctx,
+        DINCoordinator_contract.constructor(),
+        "Deploying DIN Coordinator Contract",
+        "DINCoordinator contract deployed successfully",
+        "Failed to deploy DIN Coordinator Contract"
+    )
     
     dincoordinator_contract_address = tx_receipt.contractAddress
         
@@ -88,22 +83,13 @@ def din_validator_stake(
     else:
         dinToken_address = din_addresses[effective_network]["token"]
     
-    tx_params = ctx.obj.get_tx_params()
-    tx_params["gas"] = int(w3.eth.estimate_gas(DINValidatorStake_contract.constructor(dinToken_address, dinCoordinator_address).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-  
-    tx = DINValidatorStake_contract.constructor(
-        dinToken_address, 
-        dinCoordinator_address
-    ).build_transaction(tx_params) 
-    
-    # Sign transaction
-    signed_tx = account.sign_transaction(tx)  
-    
-
-    console.print(f"[bold green]Deploying DIN Validator Stake Contract ...[/bold green]")
-    # Send raw transaction
-    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-    tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+    tx_receipt = build_and_send_tx(
+        ctx,
+        DINValidatorStake_contract.constructor(dinToken_address, dinCoordinator_address),
+        "Deploying DIN Validator Stake Contract",
+        "DINValidatorStake contract deployed successfully",
+        "Failed to deploy DIN Validator Stake Contract"
+    )
     
     DINValidatorStake_contract_address = tx_receipt.contractAddress
         
@@ -122,22 +108,13 @@ def din_validator_stake(
     time.sleep(10)
 
 
-    tx_params = ctx.obj.get_tx_params()
-    tx_params["gas"] = int(w3.eth.estimate_gas(DINCoordinator_Contract.functions.updateValidatorStakeContract(deployed_DINValidatorStake_Contract.address).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-
-    tx = DINCoordinator_Contract.functions.updateValidatorStakeContract(deployed_DINValidatorStake_Contract.address).build_transaction(tx_params) 
-        
-    # Sign transaction
-    signed_tx = account.sign_transaction(tx) 
-    
-    # Send raw transaction
-    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-    tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-    
-    if tx_receipt.status == 1:
-        console.print("[bold green] ✅ DinValidatorStake contract added to DINCoordinator contract successfully[/bold green]")
-    else:
-        console.print("[bold red] ❌ Failed to add DinValidatorStake contract to DINCoordinator contract[/bold red]")
+    build_and_send_tx(
+        ctx,
+        DINCoordinator_Contract.functions.updateValidatorStakeContract(deployed_DINValidatorStake_Contract.address),
+        "Adding DinValidatorStake contract to DINCoordinator contract",
+        "DinValidatorStake contract added to DINCoordinator contract successfully",
+        "Failed to add DinValidatorStake contract to DINCoordinator contract"
+    )
 
 
 @deploy_app.command("din-model-registry")
@@ -158,26 +135,16 @@ def deploy_din_model_registry(
     else:
         dinValidatorStake_address = din_addresses[effective_network]["stake"]
     
-    tx_params = ctx.obj.get_tx_params()
-    tx_params["gas"] = int(w3.eth.estimate_gas(DINModelRegistry_contract.constructor(dinValidatorStake_address).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-
-    tx = DINModelRegistry_contract.constructor(dinValidatorStake_address).build_transaction(tx_params) 
+    tx_receipt = build_and_send_tx(
+        ctx,
+        DINModelRegistry_contract.constructor(dinValidatorStake_address),
+        "Deploying DIN Model Registry",
+        "DINModelRegistry contract deployed successfully",
+        "Failed to deploy DINModelRegistry contract"
+    )
     
-    # Sign transaction
-    signed_tx = account.sign_transaction(tx)
-
-    console.print(f"[bold green]Deploying DIN Model Registry...[/bold green]")  
-    
-    # Send raw transaction
-    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-    tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-    
-    if tx_receipt.status == 1:
-        DINModelRegistry_contract_address = tx_receipt.contractAddress
-        console.print("[bold green] ✅ DINModelRegistry contract deployed at:[/bold green]", DINModelRegistry_contract_address)
-    else:
-        console.print("[bold red] ❌ Failed to deploy DINModelRegistry contract[/bold red]")
-        raise typer.Exit(code=1)
+    DINModelRegistry_contract_address = tx_receipt.contractAddress
+    console.print("[bold green] ✅ DINModelRegistry contract deployed at:[/bold green]", DINModelRegistry_contract_address)
     
     din_addresses[effective_network]["registry"] = DINModelRegistry_contract_address
     
@@ -227,22 +194,13 @@ def add_slasher(
             typer.Exit(1)
         console.print(f"Using DINTaskAuditor address: {contract_address} from env variable {effective_network.upper()}_{task_coordinator_address}_DINTaskAuditor_Contract_Address in {os.getcwd()}/.env")
 
-    tx_params = ctx.obj.get_tx_params()
-    tx_params["gas"] = int(w3.eth.estimate_gas(DINCoordinator_Contract.functions.addSlasherContract(contract_address).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-
-    tx = DINCoordinator_Contract.functions.addSlasherContract(contract_address).build_transaction(tx_params)
-
-    # Sign transaction
-    signed_tx = account.sign_transaction(tx)  
-    
-    # Send raw transaction
-    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-    tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-    
-    if tx_receipt.status == 1:
-        console.print("[bold green] ✓ Slasher contract added to DINCoordinator contract successfully[/bold green]")
-    else:
-        console.print("[bold red] X Failed to add Slasher contract to DINCoordinator contract[/bold red]")
+    build_and_send_tx(
+        ctx,
+        DINCoordinator_Contract.functions.addSlasherContract(contract_address),
+        "Adding Slasher contract to DINCoordinator contract",
+        "Slasher contract added to DINCoordinator contract successfully",
+        "Failed to add Slasher contract to DINCoordinator contract"
+    )
         
     
     
@@ -257,26 +215,6 @@ def total_models(ctx: typer.Context,
 
     console.print(f"[bold green]Total models: {models_length}[/bold green]")
 
-
-def build_and_send_tx(ctx, contract_function, action_msg, success_msg, error_msg):
-    effective_network, w3, account, console = ctx.obj.get_en_w3_account_console()
-    tx_params = ctx.obj.get_tx_params()
-    try:
-        tx_params["gas"] = int(w3.eth.estimate_gas(contract_function.build_transaction(tx_params)) * 1.1)
-    except Exception as e:
-        console.print(f"[bold red] X Transaction estimation failed: {e}[/bold red]")
-        raise typer.Exit(1)
-        
-    tx = contract_function.build_transaction(tx_params)
-    signed_tx = account.sign_transaction(tx)
-    console.print(f"[bold green]{action_msg}...[/bold green]")
-    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-    tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-    if tx_receipt.status == 1:
-        console.print(f"[bold green] ✓ {success_msg}[/bold green]")
-    else:
-        console.print(f"[bold red] X {error_msg}[/bold red]")
-        raise typer.Exit(1)
 
 @registry_app.command("approve-model")
 def approve_model(ctx: typer.Context, request_id: int = typer.Argument(..., help="Model request ID to approve")):

@@ -3,7 +3,8 @@ from typing import Optional
 
 import typer
 
-from dincli.cli.utils import CACHE_DIR, GIstateToStr, get_manifest_key
+from dincli.cli.utils import (CACHE_DIR, GIstateToStr, build_and_send_tx,
+                               get_manifest_key)
 from dincli.services.modelowner import getscoreforGM
 from dincli.services.cid_utils import get_cid_from_bytes32
 
@@ -88,22 +89,16 @@ def start(
 
      # === 6. Transaction Execution ===
     try:
-        tx_params = ctx.obj.get_tx_params()
-        tx_params["gas"] = int(w3.eth.estimate_gas(task_coordinator.functions.startGI(target_gi, pass_score).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-
-        tx = task_coordinator.functions.startGI(target_gi, pass_score).build_transaction(tx_params)
-        signed_tx = account.sign_transaction(tx)
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
-
-        if receipt.status != 1:
-            console.print(f"[red]❌ Transaction reverted:[/red] {tx_hash.hex()}")
-            raise typer.Exit(1)
-        
-        console.print(f"[dim]Transaction hash:[/dim] {tx_hash.hex()}")
-        console.print(f"[bold green]✓ Global iteration {target_gi} started successfully![/bold green]")
+        tx_receipt = build_and_send_tx(
+            ctx,
+            task_coordinator.functions.startGI(target_gi, pass_score),
+            f"Starting global iteration {target_gi}",
+            f"Global iteration {target_gi} started successfully!",
+            f"Transaction failed or reverted starting global iteration {target_gi}",
+            exit_on_failure=False
+        )
+        console.print(f"[dim]Transaction hash:[/dim] {tx_receipt.transactionHash.hex()}")
         console.print(f"[bold]Pass Score set to:[/bold] {pass_score}")
-
     except Exception as e:
         console.print(f"[red]❌ Transaction failed:[/red] {str(e)}")
         raise typer.Exit(1)
@@ -126,21 +121,15 @@ def aggregators_open(
     console.print(f"[bold green]Opening aggregators registration [/bold green]")
     
     try:
-        tx_params = ctx.obj.get_tx_params()
-        tx_params["gas"] = int(w3.eth.estimate_gas(task_coordinator.functions.startDINaggregatorsRegistration(curr_gi).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-
-        tx = task_coordinator.functions.startDINaggregatorsRegistration(curr_gi).build_transaction(tx_params)
-        signed_tx = account.sign_transaction(tx)
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
-
-        if receipt.status != 1:
-            console.print(f"[red]❌ Transaction reverted:[/red] {tx_hash.hex()}")
-            raise typer.Exit(1)
-        
-        console.print(f"[dim]Transaction hash:[/dim] {tx_hash.hex()}")
-        console.print("[green]✓ Aggregators registration opened![/green]")
-
+        tx_receipt = build_and_send_tx(
+            ctx,
+            task_coordinator.functions.startDINaggregatorsRegistration(curr_gi),
+            "Opening aggregators registration",
+            "Aggregators registration opened!",
+            "Transaction failed or reverted opening aggregators registration",
+            exit_on_failure=False
+        )
+        console.print(f"[dim]Transaction hash:[/dim] {tx_receipt.transactionHash.hex()}")
     except Exception as e:
         console.print(f"[red]❌ Transaction failed:[/red] {str(e)}")
         raise typer.Exit(1)
@@ -161,22 +150,15 @@ def aggregators_close(
     console.print(f"[bold green]Closing aggregators registration[/bold green]")
 
     try:
-
-        tx_params = ctx.obj.get_tx_params()
-        tx_params["gas"] = int(w3.eth.estimate_gas(task_coordinator.functions.closeDINaggregatorsRegistration(curr_GI).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-    
-        tx = task_coordinator.functions.closeDINaggregatorsRegistration(curr_GI).build_transaction(tx_params)
-        signed_tx = account.sign_transaction(tx)
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-    
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-
-        if receipt.status == 1:
-            console.print(f"[dim]Aggregators registration closed tx:[/dim] {tx_hash.hex()}")
-            console.print("[green]✓ Aggregators registration closed![/green]")
-        else:
-            console.print("[red]Error:[/red] Aggregators registration closing failed")
-            raise typer.Exit(1)
+        tx_receipt = build_and_send_tx(
+            ctx,
+            task_coordinator.functions.closeDINaggregatorsRegistration(curr_GI),
+            "Closing aggregators registration",
+            "Aggregators registration closed!",
+            "Aggregators registration closing failed",
+            exit_on_failure=False
+        )
+        console.print(f"[dim]Aggregators registration closed tx:[/dim] {tx_receipt.transactionHash.hex()}")
     except Exception as e:
         console.print(f"[red]❌ Transaction failed:[/red] {str(e)}")
         raise typer.Exit(1)
@@ -197,21 +179,15 @@ def auditors_open(
     console.print(f"[bold green]Opening auditors registration[/bold green]")
 
     try:
-        tx_params = ctx.obj.get_tx_params()
-        tx_params["gas"] = int(w3.eth.estimate_gas(task_coordinator.functions.startDINauditorsRegistration(curr_GI).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-    
-        tx = task_coordinator.functions.startDINauditorsRegistration(curr_GI).build_transaction(tx_params)
-        signed_tx = account.sign_transaction(tx)
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-    
-        if receipt.status == 1:
-            console.print(f"[dim]Auditors registration opened tx:[/dim] {tx_hash.hex()}")
-            console.print("[green]✓ Auditors registration opened![/green]")
-        else:
-            console.print("[red]Error:[/red] Auditors registration opening failed")
-            raise typer.Exit(1)
+        tx_receipt = build_and_send_tx(
+            ctx,
+            task_coordinator.functions.startDINauditorsRegistration(curr_GI),
+            "Opening auditors registration",
+            "Auditors registration opened!",
+            "Auditors registration opening failed",
+            exit_on_failure=False
+        )
+        console.print(f"[dim]Auditors registration opened tx:[/dim] {tx_receipt.transactionHash.hex()}")
     except Exception as e:
         console.print(f"[red]❌ Transaction failed:[/red] {str(e)}")
         raise typer.Exit(1)
@@ -281,20 +257,14 @@ def auditors_close(
     console.print(f"[bold green]Closing auditors registration[/bold green]")
 
     try:    
-        tx_params = ctx.obj.get_tx_params()
-        tx_params["gas"] = int(w3.eth.estimate_gas(task_coordinator.functions.closeDINauditorsRegistration(curr_GI).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-    
-        tx = task_coordinator.functions.closeDINauditorsRegistration(curr_GI).build_transaction(tx_params)
-        signed_tx = account.sign_transaction(tx)
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-
-        if receipt.status == 1:
-            console.print("[green]✓ Auditors registration closed![/green]")
-        else:
-            console.print("[red]Error:[/red] Auditors registration closing failed")
-            raise typer.Exit(1)
+        build_and_send_tx(
+            ctx,
+            task_coordinator.functions.closeDINauditorsRegistration(curr_GI),
+            "Closing auditors registration",
+            "Auditors registration closed!",
+            "Auditors registration closing failed",
+            exit_on_failure=False
+        )
     except Exception as e:
         console.print(f"[red]❌ Transaction failed:[/red] {str(e)}")
         raise typer.Exit(1)
@@ -317,20 +287,14 @@ def end(
     
     console.print(f"[bold green]Ending GI {curr_GI}...[/bold green]")   
     try:
-        tx_params = ctx.obj.get_tx_params()
-        tx_params["gas"] = int(w3.eth.estimate_gas(task_coordinator.functions.endGI(curr_GI).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-    
-        tx = task_coordinator.functions.endGI(curr_GI).build_transaction(tx_params)
-        signed_tx = account.sign_transaction(tx)
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-
-        if receipt.status == 1:
-            console.print("[green]✓ GI ended![/green]")
-        else:
-            console.print("[red]Error:[/red] GI ending failed")
-            raise typer.Exit(1)
+        build_and_send_tx(
+            ctx,
+            task_coordinator.functions.endGI(curr_GI),
+            f"Ending GI {curr_GI}",
+            "GI ended!",
+            "GI ending failed",
+            exit_on_failure=False
+        )
     except Exception as e:
         console.print(f"[red]❌ Transaction failed:[/red] {str(e)}")
         raise typer.Exit(1)

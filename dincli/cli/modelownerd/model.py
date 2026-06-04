@@ -5,7 +5,8 @@ import time
 import typer
 from web3 import Web3
 
-from dincli.cli.utils import get_env_key, get_manifest_key, set_env_key
+from dincli.cli.utils import (build_and_send_tx, get_env_key, get_manifest_key,
+                               set_env_key)
 from dincli.services.ipfs import retrieve_from_ipfs
 from dincli.services.cid_utils import get_bytes32_from_cid
 from dincli.services.modelowner import getGenesisModelIpfs, getscoreforGM
@@ -155,38 +156,23 @@ def submit_genesis(
     
     genesis_ipfs_hash_bytes32 = Web3.to_bytes(hexstr=get_bytes32_from_cid(ipfs_hash))
 
-    tx_params = ctx.obj.get_tx_params()
-    tx_params["gas"] = int(w3.eth.estimate_gas(deployed_DINTaskCoordinatorContract.functions.setGenesisModelIpfsHash(genesis_ipfs_hash_bytes32).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-    setGenesisModelIpfsHash_tx = deployed_DINTaskCoordinatorContract.functions.setGenesisModelIpfsHash(genesis_ipfs_hash_bytes32).build_transaction(tx_params)
+    tx_receipt = build_and_send_tx(
+        ctx,
+        deployed_DINTaskCoordinatorContract.functions.setGenesisModelIpfsHash(genesis_ipfs_hash_bytes32),
+        "Submitting genesis model",
+        "Genesis model submitted!",
+        "Failed to submit genesis model!"
+    )
 
-    signed = account.sign_transaction(setGenesisModelIpfsHash_tx)
-    tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-    console.print(f"[dim]Submitting genesis model tx:[/dim] {tx_hash.hex()}")
-    tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-
-    if tx_receipt.status != 1:
-        console.print("[bold red] X Failed to submit genesis model![/bold red]")
-        raise typer.Exit(1)
-    else:
-        console.print("[green]✓ Genesis model submitted![/green]")
-
-    if tx_receipt.status == 1:
-        time.sleep(10)
-        
-        console.print("Genesis model accuracy:", accuracy)
-        tx_params = ctx.obj.get_tx_params()
-        tx_params["gas"] = int(w3.eth.estimate_gas(deployed_DINTaskCoordinatorContract.functions.setTier2Score(0, int(accuracy)).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
+    time.sleep(10)
     
-        tx = deployed_DINTaskCoordinatorContract.functions.setTier2Score(0, int(accuracy)).build_transaction(tx_params)
-        
-        signed = account.sign_transaction(tx)
-        tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-        console.print(f"[dim]Submitting genesis model tier 2 score tx:[/dim] {tx_hash.hex()}")
-        tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-
-        if tx_receipt.status != 1:
-            console.print("[bold red] X Failed to submit genesis model tier 2 score![/bold red]")
-            raise typer.Exit(1)
-        else:
-            console.print("[green]✓ Genesis model tier 2 score set![/green]")
+    console.print("Genesis model accuracy:", accuracy)
+    
+    build_and_send_tx(
+        ctx,
+        deployed_DINTaskCoordinatorContract.functions.setTier2Score(0, int(accuracy)),
+        "Submitting genesis model tier 2 score",
+        "Genesis model tier 2 score set!",
+        "Failed to submit genesis model tier 2 score!"
+    )
 

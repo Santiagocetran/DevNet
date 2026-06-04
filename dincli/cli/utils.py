@@ -625,9 +625,38 @@ def is_ethereum_address(s: str) -> bool:
     return bool(re.fullmatch(r'0x[a-fA-F0-9]{40}', s))
 
 
+def build_and_send_tx(
+    ctx,
+    contract_function,
+    action_msg: str,
+    success_msg: str,
+    error_msg: str,
+    tx_params: Optional[dict] = None,
+    exit_on_failure: bool = True,
+):
+    effective_network, w3, account, console = ctx.obj.get_en_w3_account_console()
+    base_tx_params = ctx.obj.get_tx_params()
+    if tx_params:
+        base_tx_params.update(tx_params)
 
-
-
-
-    
-    
+    try:
+        base_tx_params["gas"] = int(w3.eth.estimate_gas(contract_function.build_transaction(base_tx_params)) * 1.1)
+    except Exception as e:
+        console.print(f"[bold red] X Transaction estimation failed: {e}[/bold red]")
+        if exit_on_failure:
+            raise typer.Exit(1)
+        raise e
+        
+    tx = contract_function.build_transaction(base_tx_params)
+    signed_tx = account.sign_transaction(tx)
+    console.print(f"[bold green]{action_msg}...[/bold green]")
+    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+    tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+    if tx_receipt.status == 1:
+        console.print(f"[bold green] ✓ {success_msg}[/bold green]")
+        return tx_receipt
+    else:
+        console.print(f"[bold red] X {error_msg}[/bold red]")
+        if exit_on_failure:
+            raise typer.Exit(1)
+        raise Exception(error_msg)

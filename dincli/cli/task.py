@@ -4,7 +4,8 @@ import json
 import typer
 from web3 import Web3
 
-from dincli.cli.utils import cache_manifest, get_env_key, GIstateToStr
+from dincli.cli.utils import (build_and_send_tx, cache_manifest,
+                               get_env_key, GIstateToStr)
 from dincli.services.ipfs import upload_to_ipfs
 from dincli.services.cid_utils import get_bytes32_from_cid, get_cid_from_bytes32
 
@@ -232,43 +233,36 @@ def register(
     if not isOpenSource:
         proprieteryFee = dinregistry_contract.functions.proprietaryFeeL2().call()
 
-    tx_params = ctx.obj.get_tx_params()
-    tx_params["value"] = proprieteryFee
-    tx_params["gas"] = int(w3.eth.estimate_gas(dinregistry_contract.functions.registerModel(bytes32_value, taskCoordinator, taskAuditor, isOpenSource).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
+    tx_receipt = build_and_send_tx(
+        ctx,
+        dinregistry_contract.functions.registerModel(
+            bytes32_value,
+            taskCoordinator,
+            taskAuditor,
+            isOpenSource
+        ),
+        "Registering model in DINRegistry",
+        "Model registered successfully in DINRegistry",
+        "Model registration failed in DINRegistry",
+        tx_params={"value": proprieteryFee}
+    )
 
-    tx = dinregistry_contract.functions.registerModel(
-        bytes32_value,
-        taskCoordinator, 
-        taskAuditor, 
-        isOpenSource
-    ).build_transaction(tx_params)
+    balance_wei = w3.eth.get_balance(account.address)
+    balance_eth = w3.from_wei(balance_wei, "ether")
+    
+    console.print(f"[green]ETH Balance after registration:[/green] {balance_eth} ETH") 
 
-    signed_tx = account.sign_transaction(tx)
+    events = dinregistry_contract.events.ModelRegistered().process_receipt(tx_receipt)
 
-
-    # Send raw transaction
-    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-    tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-
-    if tx_receipt.status == 1:
-        console.print(f"[green]Model registered successfully in DINRegistry[/green]")
-
-        balance_wei = w3.eth.get_balance(account.address)
-        balance_eth = w3.from_wei(balance_wei, "ether")
-        
-        console.print(f"[green]ETH Balance after registration:[/green] {balance_eth} ETH") 
-
-        events = dinregistry_contract.events.ModelRegistered().process_receipt(tx_receipt)
-
-        if events:
-            event = events[0]  # Usually one, but could be more in complex cases
-            args = event['args']
-            console.print("[bold cyan]ModelRegistered Event Emitted:[/bold cyan]")
-            console.print(f"  Model ID: {args['modelId']}")
-            console.print(f"  Owner: {args['owner']}")
-            console.print(f"  Is Open Source: {args['isOpenSource']}")
-            console.print(f"  Manifest CID: {get_cid_from_bytes32(args['manifestCID'].hex())}")
-            console.print(f"  Transaction Hash: {tx_hash.hex()}")
+    if events:
+        event = events[0]  # Usually one, but could be more in complex cases
+        args = event['args']
+        console.print("[bold cyan]ModelRegistered Event Emitted:[/bold cyan]")
+        console.print(f"  Model ID: {args['modelId']}")
+        console.print(f"  Owner: {args['owner']}")
+        console.print(f"  Is Open Source: {args['isOpenSource']}")
+        console.print(f"  Manifest CID: {get_cid_from_bytes32(args['manifestCID'].hex())}")
+        console.print(f"  Transaction Hash: {tx_receipt.transactionHash.hex()}")
     else:
         console.print("[yellow]Warning: ModelRegistered event not found in receipt.[/yellow]")
 
@@ -319,26 +313,13 @@ def update_manifest(
         manifestCID_bytes32 = get_bytes32_from_cid(manifestCID)
         bytes32_value = Web3.to_bytes(hexstr=manifestCID_bytes32)
 
-        tx_params = ctx.obj.get_tx_params()
-        tx_params["gas"] = int(w3.eth.estimate_gas(dinregistry_contract.functions.updateManifest(model_id, bytes32_value).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-        
-
-        tx = dinregistry_contract.functions.updateManifest(
-            model_id, 
-            bytes32_value
-        ).build_transaction(tx_params)
-
-        signed_tx = account.sign_transaction(tx)
-
-        # Send raw transaction
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-        tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-
-        if tx_receipt.status == 1:
-            console.print("[green]Manifest CID updated successfully for model ID {}[/green]".format(model_id))
-        else:
-            console.print("[red]Error: Manifest CID update failed for model ID {}[/red]".format(model_id))
-            raise typer.Exit(1)
+        tx_receipt = build_and_send_tx(
+            ctx,
+            dinregistry_contract.functions.updateManifest(model_id, bytes32_value),
+            f"Updating manifest CID for model ID {model_id}",
+            f"Manifest CID updated successfully for model ID {model_id}",
+            f"Manifest CID update failed for model ID {model_id}"
+        )
 
         events = dinregistry_contract.events.ManifestUpdated().process_receipt(tx_receipt)
 
@@ -348,7 +329,7 @@ def update_manifest(
             console.print("[bold cyan]ManifestUpdated Event Emitted:[/bold cyan]")
             console.print(f"  Model ID: {args['modelId']}")
             console.print(f"  New Manifest CID: {get_cid_from_bytes32(args['newManifestCID'].hex())}")
-            console.print(f"  Transaction Hash: {tx_hash.hex()}")
+            console.print(f"  Transaction Hash: {tx_receipt.transactionHash.hex()}")
         else:
             console.print("[yellow]Warning: ManifestUpdated event not found in receipt.[/yellow]")
             

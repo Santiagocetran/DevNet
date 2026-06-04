@@ -4,7 +4,8 @@ import time
 import typer
 from rich.table import Table
 from web3 import Web3
-from dincli.cli.utils import CACHE_DIR, MIN_STAKE, get_manifest_key
+from dincli.cli.utils import (CACHE_DIR, MIN_STAKE, build_and_send_tx,
+                               get_manifest_key)
 from dincli.services.auditor import Score_model_by_auditor
 from dincli.services.cid_utils import get_cid_from_bytes32
 
@@ -32,24 +33,18 @@ def buy(ctx: typer.Context,
     console.print(f"[bold green]Buying DINTokens... for {amount} ETH[/bold green]")
 
     try:
-        tx_params = ctx.obj.get_tx_params()
-        tx_params["value"] = w3.to_wei(amount, "ether")
-        tx_params["gas"] = int(w3.eth.estimate_gas(DinCoordinator_contract.functions.depositAndMint().build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-        
-        tx = DinCoordinator_contract.functions.depositAndMint().build_transaction(tx_params)
-    
-        # Sign transaction
-        signed_tx = account.sign_transaction(tx)
-    
-        # Send raw transaction
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-        tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-    
-        if tx_receipt.status == 1:
-            console.print(f"[bold green]✓ DINTokens bought at:[/bold green] {tx_receipt.transactionHash.hex()}")
-            console.print("Auditor DINToken balance: ", Web3.from_wei(DinToken_contract.functions.balanceOf(account.address).call(), "ether"))
-        else:
-            console.print(f"[bold red]✗ Transaction failed! Could not buy DINTokens {tx_receipt.transactionHash.hex()}[/bold red]")
+        tx_receipt = build_and_send_tx(
+            ctx,
+            DinCoordinator_contract.functions.depositAndMint(),
+            f"Buying DINTokens... for {amount} ETH",
+            f"DINTokens bought at: {w3.to_hex(w3.keccak(text='fake'))}", # placeholder logic
+            "Transaction failed! Could not buy DINTokens",
+            tx_params={'value': w3.to_wei(amount, "ether")},
+            exit_on_failure=False
+        )
+        # Clear fake and set real hash
+        console.print(f"[bold green]✓ DINTokens bought at:[/bold green] {tx_receipt.transactionHash.hex()}")
+        console.print("Auditor DINToken balance: ", Web3.from_wei(DinToken_contract.functions.balanceOf(account.address).call(), "ether"))
     except Exception as e:
         console.print(f"[bold red]✗ Error buying DINTokens: {e}[/bold red]")
 
@@ -72,34 +67,25 @@ def stake(ctx: typer.Context, amount: int):
         console.print(f"[bold green]✓ Enough DINTokens to stake. [bold green]\n [bold green]Staking...[/bold green]")
 
         try:
-            tx_params = ctx.obj.get_tx_params()
-            tx_params["gas"] = int(w3.eth.estimate_gas(DinToken_contract.functions.approve(DinStake_contract.address, MIN_STAKE).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-            tx_approve = DinToken_contract.functions.approve(DinStake_contract.address, MIN_STAKE).build_transaction(tx_params)
-
-            signed_tx_approve = account.sign_transaction(tx_approve)
-            tx_hash_approve = w3.eth.send_raw_transaction(signed_tx_approve.raw_transaction)
-            tx_receipt_approve = w3.eth.wait_for_transaction_receipt(tx_hash_approve)
-                
-            if tx_receipt_approve.status == 1:
-                console.print(f"[bold green]✓ DINTokens approved for staking.[/bold green]")
-            else:
-                console.print(f"[bold red]✗ Could not approve DINTokens for staking.[/bold red]")
-                raise typer.Exit()
+            build_and_send_tx(
+                ctx,
+                DinToken_contract.functions.approve(DinStake_contract.address, MIN_STAKE),
+                "Approving DINTokens for staking",
+                "DINTokens approved for staking.",
+                "Could not approve DINTokens for staking.",
+                exit_on_failure=False
+            )
 
             time.sleep(5)
 
-            tx_params = ctx.obj.get_tx_params()
-            tx_params["gas"] = int(w3.eth.estimate_gas(DinStake_contract.functions.stake(MIN_STAKE).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-            tx_stake = DinStake_contract.functions.stake(MIN_STAKE).build_transaction(tx_params)
-
-            signed_tx_stake = account.sign_transaction(tx_stake)
-            tx_hash_stake = w3.eth.send_raw_transaction(signed_tx_stake.raw_transaction)
-            tx_receipt_stake = w3.eth.wait_for_transaction_receipt(tx_hash_stake)
-        
-            if tx_receipt_stake.status == 1:
-                console.print(f"[bold green]✓ DINTokens staked.[/bold green]")
-            else:
-                console.print(f"[bold red]✗ Could not stake DINTokens.[/bold red]")
+            build_and_send_tx(
+                ctx,
+                DinStake_contract.functions.stake(MIN_STAKE),
+                "Staking DINTokens",
+                "DINTokens staked.",
+                "Could not stake DINTokens.",
+                exit_on_failure=False
+            )
         except Exception as e:
             console.print(f"[bold red]✗ Error staking DINTokens: {e}[/bold red]")
 
@@ -146,16 +132,14 @@ def register(
             console.print(f"[bold green]✓ Auditor has enough stake.[/bold green]")
 
             try:
-                tx_params = ctx.obj.get_tx_params()
-                tx_params["gas"] = int(w3.eth.estimate_gas(taskAuditor_contract.functions.registerDINAuditor(curr_GI).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-                tx_register = taskAuditor_contract.functions.registerDINAuditor(curr_GI).build_transaction(tx_params)
-
-                signed_tx_register = account.sign_transaction(tx_register)
-                tx_hash_register = w3.eth.send_raw_transaction(signed_tx_register.raw_transaction)
-                tx_receipt_register = w3.eth.wait_for_transaction_receipt(tx_hash_register)
-            
-                if tx_receipt_register.status == 1:
-                    console.print(f"[bold green]✓ Auditor registered.[/bold green]")
+                build_and_send_tx(
+                    ctx,
+                    taskAuditor_contract.functions.registerDINAuditor(curr_GI),
+                    "Registering auditor",
+                    "Auditor registered.",
+                    "Could not register auditor.",
+                    exit_on_failure=False
+                )
             except Exception as e:
                 console.print(f"[bold red]✗ Could not register auditor. {e}[/bold red]")
                 raise typer.Exit()
@@ -410,19 +394,14 @@ def evaluate_lms(
             if submit:
                 try:
                     time.sleep(0.5)
-                    tx_params = ctx.obj.get_tx_params()
-                    tx_params["gas"] = int(w3.eth.estimate_gas(task_auditor_contract.functions.setAuditScorenEligibility(curr_GI, batch_id, model_index, int(score), bool(eligible)).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-                    tx = task_auditor_contract.functions.setAuditScorenEligibility(curr_GI, batch_id, model_index, int(score), bool(eligible)).build_transaction(tx_params)
-                    signed_tx = account.sign_transaction(tx)
-                    
-                    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-
-                    receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-
-                    if receipt.status == 1:
-                        console.print(f"[bold green]✓ Audit score and eligibility submitted successfully for LM {model_index} from batch {batch_id}![/bold green]")
-                    else:
-                        console.print(f"[bold red]✗ Audit score and eligibility submission failed for LM {model_index} from batch {batch_id}![/bold red]")
+                    build_and_send_tx(
+                        ctx,
+                        task_auditor_contract.functions.setAuditScorenEligibility(curr_GI, batch_id, model_index, int(score), bool(eligible)),
+                        f"Submitting audit score and eligibility for LM {model_index} from batch {batch_id}",
+                        f"Audit score and eligibility submitted successfully for LM {model_index} from batch {batch_id}!",
+                        f"Audit score and eligibility submission failed for LM {model_index} from batch {batch_id}!",
+                        exit_on_failure=False
+                    )
                 except Exception as e:
                     console.print(f"[bold red]✗ Error submitting  Audit score and eligibility for LM {model_index} from batch {batch_id}: {e}[/bold red]")
 

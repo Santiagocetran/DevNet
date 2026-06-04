@@ -3,7 +3,7 @@ import time
 import typer
 from rich.table import Table
 
-from dincli.cli.utils import CACHE_DIR, get_manifest_key
+from dincli.cli.utils import CACHE_DIR, build_and_send_tx, get_manifest_key
 from dincli.services.modelowner import getscoreforGM
 from dincli.services.cid_utils import get_cid_from_bytes32
 
@@ -32,20 +32,15 @@ def create_tier1_tier2_batches(
     console.print(f"[bold green]Creating Tier 1 & Tier 2 batches[/bold green]")
     
     try:
-        tx_params = ctx.obj.get_tx_params()
-        tx_params["gas"] = int(w3.eth.estimate_gas(task_coordinator_Contract.functions.autoCreateTier1AndTier2(ref_gi).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-        tx = task_coordinator_Contract.functions.autoCreateTier1AndTier2(ref_gi).build_transaction(tx_params)
-        
-        signed = account.sign_transaction(tx)
-        tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-        console.print(f"[dim]Tx hash: {tx_hash.hex()}[/dim]")
-    
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-        if receipt.status == 1:
-            console.print("[green]✓ Tier 1 & Tier 2 batches created successfully[/green]")
-        else:
-            console.print("[red]Error: Could not create Tier 1 & Tier 2 batches. Transaction failed[/red]")
-            raise typer.Exit(1)
+        tx_receipt = build_and_send_tx(
+            ctx,
+            task_coordinator_Contract.functions.autoCreateTier1AndTier2(ref_gi),
+            "Creating Tier 1 & Tier 2 batches",
+            "Tier 1 & Tier 2 batches created successfully",
+            "Could not create Tier 1 & Tier 2 batches. Transaction failed",
+            exit_on_failure=False
+        )
+        console.print(f"[dim]Tx hash: {tx_receipt.transactionHash.hex()}[/dim]")
     except Exception as e:
         console.print(f"[red]Error: Could not create Tier 1 & Tier 2 batches. {str(e)}[/red]")
         raise typer.Exit(1)
@@ -174,21 +169,15 @@ def start_t1_aggregation(
     console.print(f"[bold green]Starting Tier 1 Aggregation[/bold green]")
 
     try:
-        tx_params = ctx.obj.get_tx_params()
-        tx_params["gas"] = int(w3.eth.estimate_gas(task_coordinator_Contract.functions.startT1Aggregation(ref_gi).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-        tx = task_coordinator_Contract.functions.startT1Aggregation(ref_gi).build_transaction(tx_params)
-        signed = account.sign_transaction(tx)
-        tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-        console.print(f"[dim]Tx hash: {tx_hash.hex()}[/dim]")
-
-        tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-
-        if tx_receipt.status == 1:
-            console.print("[green]✓ Tier 1 Aggregation started[/green]")
-        else:
-            console.print("[red]Tier 1 Aggregation started transaction failed[/red]")
-            raise typer.Exit(1)
-    
+        tx_receipt = build_and_send_tx(
+            ctx,
+            task_coordinator_Contract.functions.startT1Aggregation(ref_gi),
+            "Starting Tier 1 Aggregation",
+            "Tier 1 Aggregation started",
+            "Tier 1 Aggregation started transaction failed",
+            exit_on_failure=False
+        )
+        console.print(f"[dim]Tx hash: {tx_receipt.transactionHash.hex()}[/dim]")
     except Exception as e:
         console.print(f"[red]Error: Tier 1 Aggregation started transaction failed[/red] {e}")
         raise typer.Exit(1)
@@ -211,20 +200,15 @@ def close_t1_aggregation(
     console.print(f"[bold green]Finalizing Tier 1 Aggregation[/bold green]")
 
     try:
-        tx_params = ctx.obj.get_tx_params()
-        tx_params["gas"] = int(w3.eth.estimate_gas(task_coordinator_Contract.functions.finalizeT1Aggregation(ref_gi).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-        tx = task_coordinator_Contract.functions.finalizeT1Aggregation(ref_gi).build_transaction(tx_params)
-        signed = account.sign_transaction(tx)
-        tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-        console.print(f"[dim]Tx hash: {tx_hash.hex()}[/dim]")
-    
-        tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-        if tx_receipt.status == 1:
-            console.print("[green]✓ Tier 1 Aggregation finalized[/green]")
-        else:
-            console.print("[red]Tier 1 Aggregation finalized transaction failed[/red]")
-            raise typer.Exit(1)
-    
+        tx_receipt = build_and_send_tx(
+            ctx,
+            task_coordinator_Contract.functions.finalizeT1Aggregation(ref_gi),
+            "Finalizing Tier 1 Aggregation",
+            "Tier 1 Aggregation finalized",
+            "Tier 1 Aggregation finalized transaction failed",
+            exit_on_failure=False
+        )
+        console.print(f"[dim]Tx hash: {tx_receipt.transactionHash.hex()}[/dim]")
     except Exception as e:
         console.print(f"[red]Error: Tier 1 Aggregation finalized transaction failed[/red] {e}")
         raise typer.Exit(1)
@@ -246,19 +230,15 @@ def start_t2_aggregation(
 
     console.print(f"[bold green]Starting Tier 2 Aggregation[/bold green]")
     try:
-        tx_params = ctx.obj.get_tx_params()
-        tx_params["gas"] = int(w3.eth.estimate_gas(task_coordinator_Contract.functions.startT2Aggregation(ref_gi).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-        tx = task_coordinator_Contract.functions.startT2Aggregation(ref_gi).build_transaction(tx_params)
-        signed = account.sign_transaction(tx)
-        tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-        console.print(f"[dim]Tx hash: {tx_hash.hex()}[/dim]")
-    
-        tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-        if tx_receipt.status == 1:
-            console.print("[green]✓ Tier 2 Aggregation started[/green]")
-        else:
-            console.print("[red]Tier 2 Aggregation started transaction failed[/red]")
-            raise typer.Exit(1)
+        tx_receipt = build_and_send_tx(
+            ctx,
+            task_coordinator_Contract.functions.startT2Aggregation(ref_gi),
+            "Starting Tier 2 Aggregation",
+            "Tier 2 Aggregation started",
+            "Tier 2 Aggregation started transaction failed",
+            exit_on_failure=False
+        )
+        console.print(f"[dim]Tx hash: {tx_receipt.transactionHash.hex()}[/dim]")
     except Exception as e:
         console.print(f"[red]Error: Tier 2 Aggregation started transaction failed[/red] {e}")
         raise typer.Exit(1)
@@ -281,19 +261,15 @@ def close_t2_aggregation(
 
     console.print(f"[bold green]Finalizing Tier 2 Aggregation[/bold green]")
     try:
-        tx_params = ctx.obj.get_tx_params()
-        tx_params["gas"] = int(w3.eth.estimate_gas(task_coordinator_Contract.functions.finalizeT2Aggregation(ref_gi).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-        tx = task_coordinator_Contract.functions.finalizeT2Aggregation(ref_gi).build_transaction(tx_params)
-        signed = account.sign_transaction(tx)
-        tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-        console.print(f"[dim]Tx hash: {tx_hash.hex()}[/dim]")
-    
-        tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-        if tx_receipt.status == 1:
-            console.print("[green]✓ Tier 2 Aggregation finalized[/green]")
-        else:
-            console.print("[red]Tier 2 Aggregation finalized transaction failed[/red]")
-            raise typer.Exit(1)
+        tx_receipt = build_and_send_tx(
+            ctx,
+            task_coordinator_Contract.functions.finalizeT2Aggregation(ref_gi),
+            "Finalizing Tier 2 Aggregation",
+            "Tier 2 Aggregation finalized",
+            "Tier 2 Aggregation finalized transaction failed",
+            exit_on_failure=False
+        )
+        console.print(f"[dim]Tx hash: {tx_receipt.transactionHash.hex()}[/dim]")
 
         # 2. Get Tier 2 batch to find final CID
         time.sleep(10)
@@ -333,19 +309,15 @@ def close_t2_aggregation(
         console.print(f"[green]Accuracy:[/green] {accuracy}")
 
         # 4. Set Tier 2 score
-        console.print("[cyan]Setting Tier 2 score...[/cyan]")
-        tx_params = ctx.obj.get_tx_params()
-        tx_params["gas"] = int(w3.eth.estimate_gas(task_coordinator_Contract.functions.setTier2Score(curr_GI, int(accuracy)).build_transaction(tx_params)) * 1.1)  # Add 10% buffer
-        tx = task_coordinator_Contract.functions.setTier2Score(curr_GI, int(accuracy)).build_transaction(tx_params)
-        signed = account.sign_transaction(tx)
-        tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-        console.print(f"[dim]Score Tx hash: {tx_hash.hex()}[/dim]")
-        tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-        if tx_receipt.status == 1:
-            console.print("[green]✓ Tier 2 Aggregation finalized and score set[/green]")
-        else:
-            console.print("[red]Tier 2 score set transaction failed[/red]")
-            raise typer.Exit(1)
+        score_receipt = build_and_send_tx(
+            ctx,
+            task_coordinator_Contract.functions.setTier2Score(curr_GI, int(accuracy)),
+            "Setting Tier 2 score",
+            "Tier 2 Aggregation finalized and score set",
+            "Tier 2 score set transaction failed",
+            exit_on_failure=False
+        )
+        console.print(f"[dim]Score Tx hash: {score_receipt.transactionHash.hex()}[/dim]")
 
     except Exception as e:
         console.print(f"[red]Error: Tier 2 Aggregation finalized and score set transactions failed[/red] {e}")
