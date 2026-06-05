@@ -106,6 +106,7 @@ Define and enforce accountability mechanisms for invalid aggregation, incorrect 
 - On-chain and off-chain dispute triggers
 - Re-execution and consensus mismatch checks
 - Re-evaluation and validator reassignment workflows
+- Public documentation for slashing rules, known validator failure modes, and operator-safe recovery steps
 
 **Target window:** Late June to mid July 2026
 
@@ -131,6 +132,7 @@ Harden the full system through integration testing, adversarial validation, opti
 **Focus areas**
 - Devnet integration of all P3 components
 - Production-grade staking hardening, including delayed withdrawals and post-service penalty windows
+- Validator operator readiness checklist covering key handling, resource ceilings, restart behavior, and monitoring basics
 - Contract upgrade flows
 - End-to-end integration testing
 - Collusion, Sybil, and reward manipulation simulations
@@ -168,6 +170,8 @@ Create the long-running daemon foundation that can operate reliably across roles
 - Job queue system
 - Persistent state and recovery
 - Logging and restart handling
+- Graceful `SIGTERM` and shutdown handling to avoid local state corruption
+- Structured stdout logs suitable for container and service-manager collection
 - Shared SDK extraction from CLI components
 - CLI-to-daemon integration
 
@@ -264,7 +268,9 @@ Ensure that daemon-based execution remains safe, isolated, and privacy-aware whe
 - Sandboxed or containerized execution
 - File and data isolation
 - Secure key handling
+- No plaintext private keys in `.env`; support passphrase-protected keystores and future vault-backed setups
 - Protection against malicious models
+- Network isolation guidance for validator containers and task-execution sandboxes
 - Task-level privacy controls
 - Data sensitivity filters
 - Participation policy enforcement
@@ -280,6 +286,9 @@ Complete end-to-end integration with earlier DIN phases and prepare the daemon f
 - Multi-role simulations
 - Stabilization and debugging
 - Release packaging for binaries and Docker images
+- Docker Compose run path with one-command start, stop, and upgrade flows for validator operators
+- Basic HTTP `/health` endpoint for monitoring daemon and validator readiness
+- `systemd` and `launchd` unit examples for clean restarts
 - Installation and usage documentation
 - Community onboarding materials
 
