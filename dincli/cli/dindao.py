@@ -45,7 +45,7 @@ def din_coordinator(
     din_addresses[effective_network]["representative"] = account.address 
     save_din_info(din_addresses)
 
-    taskCoordinator_contract = ctx.obj.get_deployed_din_coordinator_contract()
+    taskCoordinator_contract = ctx.obj.get_deployed_din_coordinator_contract(verbose=False)
     
     dintoken_address = taskCoordinator_contract.functions.dinToken().call()
     console.print("DINtoken contract deployed at:", dintoken_address)

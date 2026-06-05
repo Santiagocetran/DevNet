@@ -270,7 +270,7 @@ def connect_wallet(ctx: typer.Context,
             json.dump(wallet_data, f, indent=4)
         console.print(f"[green]✅ Wallet saved in DEMO MODE (plaintext)![/green]")
         console.print(f"[yellow]Address:[/yellow] {acct.address}")
-        console.print(f"[cyan]File:[/cyan] {WALLET_FILE}")
+        console.print(f"[cyan]Wallet File:[/cyan] {WALLET_FILE}")
         
     else:
 
@@ -692,7 +692,7 @@ def distribute_mnist(
 
         console.print(f"[bold green]✅ MNIST distributed to {num_clients} clients under {clients_dir}[/bold green]")
     
-@app.command()
+@app.command("dump-abi")
 def dump_abi(
     ctx: typer.Context,
     artifact_path: str = typer.Option(..., "--artifact", help="Path to contract artifact JSON (e.g., hardhat/artifacts/.../DINCoordinator.json)"),

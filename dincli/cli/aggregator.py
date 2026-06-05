@@ -2,8 +2,7 @@ from pathlib import Path
 import time
 import typer
 from rich.table import Table
-from web3 import Web3
-
+from dincli.cli.dintoken import buy_dintokens, read_dintoken_stake, stake_dintokens
 from dincli.cli.utils import (CACHE_DIR, MIN_STAKE, build_and_send_tx,
                                get_manifest_key)
 from dincli.services.aggregator import get_aggregated_cid
@@ -15,86 +14,26 @@ dintoken_app = typer.Typer(help="Commands for DIN Token in DIN.")
 app.add_typer(dintoken_app, name="dintoken")
 
 
-@dintoken_app.command(help="Buy DINTokens where amount is ETh to exchange for DINTokens")
-def buy(ctx: typer.Context, 
-        amount: float = typer.Argument(..., help="Amount of ETH to exchange for DINTokens")
-    ):
-    
-    effective_network, w3, account, console = ctx.obj.get_en_w3_account_console()
+@dintoken_app.command(help="Buy DINTokens where amount is ETH to exchange for DINTokens")
+def buy(
+    ctx: typer.Context,
+    amount: float = typer.Argument(..., help="Amount of ETH to exchange for DINTokens"),
+):
+    buy_dintokens(ctx, amount, name= "Aggregator")
 
-    DINToken_contract = ctx.obj.get_deployed_din_token_contract()
-    DinCoordinator_contract = ctx.obj.get_deployed_din_coordinator_contract()
-    
-    console.print("[bold green]Aggregator ETH balance:[/bold green] ", Web3.from_wei(w3.eth.get_balance(account.address), "ether"))
-    console.print("[bold green]Aggregator DINToken balance:[/bold green] ", DINToken_contract.functions.balanceOf(account.address).call()/(10**18))
 
-    console.print(f"[bold green]Buying DINTokens... for {amount} ETH[/bold green]")
-
-    try:
-        tx_receipt = build_and_send_tx(
-            ctx,
-            DinCoordinator_contract.functions.depositAndMint(),
-            f"Buying DINTokens... for {amount} ETH",
-            f"DINTokens bought at: {w3.to_hex(w3.keccak(text='fake'))}", # placeholder logic or tx_receipt.transactionHash.hex() will be handled
-            "Transaction failed! Could not buy DINTokens",
-            tx_params={'value': w3.to_wei(amount, "ether")},
-            exit_on_failure=False
-        )
-        # Clear fake and set real hash
-        console.print(f"[bold green]✓ DINTokens bought at:[/bold green] {tx_receipt.transactionHash.hex()}")
-        console.print("Aggregator DINToken balance: ", Web3.from_wei(DINToken_contract.functions.balanceOf(account.address).call(), "ether"))
-    except Exception as e:
-        console.print(f"[bold red]✗ Error buying DINTokens: {e}[/bold red]")
-    
 @dintoken_app.command(help="Stake DINTokens")
-def stake(ctx: typer.Context, amount: int):
+def stake(
+    ctx: typer.Context,
+    amount: int = typer.Argument(..., help="Amount of DINTokens to stake"),
+):
+    stake_dintokens(ctx, amount, name= "Aggregator")
 
-    effective_network, w3, account, console = ctx.obj.get_en_w3_account_console()
-
-    DinToken_contract, DinStake_contract = ctx.obj.get_deployed_din_token_contract(), ctx.obj.get_deployed_din_stake_contract()
-
-    aggregator_Din_token_balance = DinToken_contract.functions.balanceOf(account.address).call()
-
-    console.print(f"[bold green]Aggregator ETH balance:[/bold green] {Web3.from_wei(w3.eth.get_balance(account.address), "ether")}")
-    console.print(f"[bold green]Aggregator DINToken balance:[/bold green] {Web3.from_wei(aggregator_Din_token_balance, "ether")}")
-    
-    if aggregator_Din_token_balance < MIN_STAKE:
-        console.print(f"[bold red]✗ Could not stake DINTokens. Not enough DINTokens.[/bold red]")
-        raise typer.Exit()
-    else:
-        console.print(f"[bold green]✓ Enough DINTokens to stake. [bold green]\n [bold green]Staking...[/bold green]")
-
-        try:
-            build_and_send_tx(
-                ctx,
-                DinToken_contract.functions.approve(DinStake_contract.address, MIN_STAKE),
-                "Approving DINTokens for staking",
-                "DINTokens approved for staking.",
-                "Could not approve DINTokens for staking.",
-                exit_on_failure=False
-            )
-
-            time.sleep(5)
-
-            build_and_send_tx(
-                ctx,
-                DinStake_contract.functions.stake(MIN_STAKE),
-                "Staking DINTokens",
-                "DINTokens staked.",
-                "Could not stake DINTokens.",
-                exit_on_failure=False
-            )
-        except Exception as e:
-            console.print(f"[bold red]✗ Could not stake DINTokens. {e}[/bold red]")
 
 @dintoken_app.command("read-stake", help="Check stake")
 def read_stake(ctx: typer.Context):
+    read_dintoken_stake(ctx, name= "Aggregator")
 
-    effective_network, w3, account, console = ctx.obj.get_en_w3_account_console()
-
-    DinStake_contract = ctx.obj.get_deployed_din_stake_contract()
-
-    console.print("Aggregator staked DIN tokens : ", Web3.from_wei(DinStake_contract.functions.getStake(account.address).call(), "ether"))
 
 @app.command(help="Register as aggregator")
 def register(
