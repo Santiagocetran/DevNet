@@ -87,6 +87,105 @@ Client containers should:
 - write outputs to a controlled output directory
 - support CPU-only and GPU-enabled execution profiles
 
+#### Client Training Service Lifecycle
+
+The client training service should use a split control-plane and worker model.
+
+The trusted `dincli` process remains the persistent control plane. It is configured once by the stakeholder/operator and owns:
+
+- network and RPC configuration
+- wallet or signer configuration
+- task discovery and manifest validation
+- local policy about accepted tasks, hardware limits, GPU use, and network access
+- IPFS upload/download orchestration
+- final contract submissions and signatures
+- durable DIN state under the current user config and cache directories
+
+The untrusted model-owner client training service runs in a short-lived worker container. A new worker container should be created for each training job, normally scoped by model/task/global iteration. The worker receives only the inputs required for that one job, writes artifacts to a controlled output directory, and exits. The host then validates and submits the output.
+
+This means stakeholders do not reconfigure `dincli` for every model. They configure their DIN node once, then `dincli` reuses that persistent trusted configuration while spinning up isolated training containers as work arrives.
+
+Recommended first lifecycle:
+
+1. Stakeholder runs `dincli init` or an equivalent setup command once.
+2. `dincli` keeps persistent trusted config and wallet state in the current host config directory, such as `~/.config/dincli`.
+3. Stakeholder registers local data directories and policy preferences once, or per task when explicit consent is needed.
+4. For each accepted model/task/GI, `dincli` prepares the existing model cache under a path such as `~/.cache/dincli/<network>/model_<model_id>/`.
+5. `dincli` downloads the manifest, service scripts, current global model, and allowed metadata into the task workspace.
+6. `dincli` starts a worker container from a DIN-maintained client runtime image.
+7. The worker mounts only the approved dataset path, task cache, service files, input files, and output directory.
+8. The worker trains the local model and writes a structured result bundle to the output directory.
+9. The worker exits and is removed.
+10. `dincli` validates the output bundle, uploads the approved artifact to IPFS, and submits the transaction from the trusted host process.
+
+The container should be disposable. The useful state is kept in explicit host-managed directories, not in the container filesystem.
+
+Suggested host directory layout:
+
+```text
+~/.config/dincli/
+  config.json
+  wallet.json
+
+~/.cache/dincli/
+  <network>/
+    model_<model_id>/
+      manifest.json
+      manifest.json.cid
+      local.json.cid
+      services/
+      models/
+      dataset/
+      worker/
+        gi-<n>/
+          job.json
+          output/
+          logs/
+```
+
+Suggested worker mounts:
+
+| Host Path | Container Path | Mode | Purpose |
+| --- | --- | --- | --- |
+| approved local dataset | `/din/data` | read-only | Raw or staged client training data explicitly allowed by the stakeholder |
+| `~/.cache/dincli/<network>/model_<model_id>` | `/din/model` | read-write | Manifest, services, models, datasets, and task-local artifacts for this model |
+| `~/.cache/dincli/<network>/model_<model_id>/worker/gi-<n>/output` | `/din/output` | read-write | Worker result JSON and any future local output bundle |
+| `~/.cache/dincli/<network>/model_<model_id>/worker/gi-<n>/logs` | `/din/logs` | read-write | Worker logs and diagnostics |
+
+Do not mount:
+
+- `~/.config/dincli` directly into the untrusted worker
+- any keystore directory or signer secret
+- wallet files
+- private keys
+- cache directories unrelated to the current model/task
+- arbitrary home directories
+
+For different models, clients should usually get different task workspaces and fresh worker containers. For repeated global iterations of the same model/task, DIN can reuse the mounted model cache if the task policy allows it. This supports practical caching without letting one model's service code inspect another model's state.
+
+The worker input contract should be a structured file, for example `/din/job/job.json`, rather than direct access to the full `dincli` config. It can include:
+
+- task id and model id
+- global iteration
+- paths inside the container
+- training hyperparameters from the manifest
+- privacy policy parameters
+- expected output filenames
+- resource limits visible to the worker
+- optional network policy summary
+
+The worker output contract should also be structured, for example `/din/output/result.json`, and should point to produced artifacts rather than submitting anything directly. It can include:
+
+- local model update path
+- metrics path
+- logs path
+- data quality summary
+- training status
+- error code and message when failed
+- artifact checksums
+
+The trusted host process remains responsible for deciding whether the output is acceptable, uploading artifacts, and signing any transaction.
+
 ### Aggregators
 
 Aggregators process submitted updates and may run aggregation services or load submitted model artifacts.
@@ -229,7 +328,10 @@ These costs should be documented clearly so node operators can choose appropriat
 ### Phase 1: Local Docker Worker Prototype
 
 - Add an internal container runner abstraction.
+- Keep `dincli` configuration and trusted state persistent on the host under the current `~/.config/dincli` and `~/.cache/dincli` layout.
 - Run one client training service through Docker with controlled input/output mounts.
+- Create a fresh short-lived worker container per client training job, scoped by task/model/GI.
+- Use task-specific workspaces and caches so repeated iterations can reuse allowed state without sharing state across unrelated models.
 - Keep transaction signing and IPFS submission on the host.
 - Add CPU, RAM, timeout, and read-only mount controls.
 - Document local Docker requirements and minimum resource ceilings.
