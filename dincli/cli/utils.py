@@ -625,6 +625,63 @@ def is_ethereum_address(s: str) -> bool:
     return bool(re.fullmatch(r'0x[a-fA-F0-9]{40}', s))
 
 
+def resolve_task_coordinator_address(
+    effective_network: str,
+    address: Optional[str],
+    console,
+    verbose: bool = True,
+    exit_on_failure: bool = True,
+) -> Optional[str]:
+    """Resolve a DINTaskCoordinator contract address.
+
+    Resolution order:
+    1. ``address`` argument (e.g. from ``--taskCoordinator`` CLI option).
+    2. Environment variable ``{NETWORK_UPPER}_DINTaskCoordinator_Contract_Address``
+       (read from the current directory's ``.env`` or the process environment).
+
+    Args:
+        effective_network: The active network name (e.g. ``"local"``).
+        address: Explicitly provided address, or ``None`` to trigger env-var lookup.
+        console: Rich ``Console`` instance used for status messages.
+        verbose: When *True* (default), print where the address came from.
+        exit_on_failure: When *True* (default), call ``raise typer.Exit(1)`` if
+            the address cannot be resolved instead of returning ``None``.
+
+    Returns:
+        The resolved checksum-able address string, or ``None`` when
+        ``exit_on_failure=False`` and the address could not be found.
+    """
+    env_key = effective_network.upper() + "_DINTaskCoordinator_Contract_Address"
+
+    if address:
+        if verbose:
+            console.print(
+                f"[bold green] ✓ Using DIN Task Coordinator Address: {address} "
+                f"(from argument)[/bold green]"
+            )
+        return address
+
+    # Try env / .env file
+    address = get_env_key(env_key, verbose=False)
+    if address:
+        if verbose:
+            console.print(
+                f"[bold green] ✓ Using DIN Task Coordinator Address: {address} "
+                f"(from {os.getcwd()}/.env → {env_key})[/bold green]"
+            )
+        return address
+
+    # Not found
+    console.print(
+        f"[bold red]✗ Task Coordinator Address not found.[/bold red]\n"
+        f"  Provide it via [cyan]--taskCoordinator <address>[/cyan], or set "
+        f"[cyan]{env_key}[/cyan] in [cyan]{os.getcwd()}/.env[/cyan]."
+    )
+    if exit_on_failure:
+        raise typer.Exit(1)
+    return None
+
+
 def build_and_send_tx(
     ctx,
     contract_function,
@@ -633,6 +690,7 @@ def build_and_send_tx(
     error_msg: str,
     tx_params: Optional[dict] = None,
     exit_on_failure: bool = True,
+    show_tx_hash: bool = True,
 ):
     effective_network, w3, account, console = ctx.obj.get_en_w3_account_console()
     base_tx_params = ctx.obj.get_tx_params()
@@ -645,18 +703,33 @@ def build_and_send_tx(
         console.print(f"[bold red] X Transaction estimation failed: {e}[/bold red]")
         if exit_on_failure:
             raise typer.Exit(1)
-        raise e
-        
-    tx = contract_function.build_transaction(base_tx_params)
-    signed_tx = account.sign_transaction(tx)
-    console.print(f"[bold green]{action_msg}...[/bold green]")
-    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-    tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-    if tx_receipt.status == 1:
-        console.print(f"[bold green] ✓ {success_msg}[/bold green]")
-        return tx_receipt
-    else:
+        return None
+
+    try:
+        tx = contract_function.build_transaction(base_tx_params)
+        signed_tx = account.sign_transaction(tx)
+        console.print(f"[bold green]{action_msg}...[/bold green]")
+        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+        if show_tx_hash:
+            console.print(f"[bold green]Transaction hash:[/bold green] {tx_hash.hex()}")
+        tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+        if tx_receipt.status == 1:
+            console.print(f"[bold green] ✓ {success_msg}[/bold green]")
+            return tx_receipt
         console.print(f"[bold red] X {error_msg}[/bold red]")
         if exit_on_failure:
             raise typer.Exit(1)
-        raise Exception(error_msg)
+        return None
+    except Exception as e:
+        console.print(
+            f"[bold red]✗ {error_msg}[/bold red]"
+        )
+        console.print(
+            f"[bold red]Exception: {e}[/bold red]"
+        )
+
+        if exit_on_failure:
+            raise typer.Exit(1)
+
+        return None
+    

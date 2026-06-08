@@ -5,7 +5,7 @@ import typer
 
 from dincli.cli.contract_utils import get_contract_instance
 from dincli.cli.utils import (build_and_send_tx, get_env_key, load_din_info,
-                               save_din_info)
+                               resolve_task_coordinator_address, save_din_info)
 
 app = typer.Typer(help="Commands for DIN DAO")
 
@@ -150,7 +150,7 @@ def deploy_din_model_registry(
     
     save_din_info(din_addresses)
     
-@app.command(
+@app.command("add-slasher",
     help="Add a slasher to the DIN SlasherRegistry contract."
     "You must specify either the task coordinator or the task auditor (from config) to be registered as the slasher."
     "The contract address can be provided explicitly or loaded from config."
@@ -177,22 +177,27 @@ def add_slasher(
 
     if contract:
         contract_address = contract
-    elif  task_coordinator_flag:
-        contract_address = get_env_key(effective_network.upper()+"_DINTaskCoordinator_Contract_Address")
-        if not contract_address:
-            typer.Exit(1)
-        console.print(f"Using DINTaskCoordinator address: {contract_address} from env variable {effective_network.upper()}_DINTaskCoordinator_Contract_Address in {os.getcwd()}/.env")
+    elif task_coordinator_flag:
+        contract_address = resolve_task_coordinator_address(
+            effective_network, None, console
+        )
     elif task_auditor_flag:
-        task_coordinator_key = f"{effective_network.upper()}_DINTaskCoordinator_Contract_Address"
-        task_coordinator_address = get_env_key(task_coordinator_key)
-
-        if not task_coordinator_address:
-            typer.Exit(1)
-
-        contract_address = get_env_key(effective_network.upper()+"_"+task_coordinator_address+"_DINTaskAuditor_Contract_Address")
+        task_coordinator_address = resolve_task_coordinator_address(
+            effective_network, None, console
+        )
+        contract_address = get_env_key(
+            effective_network.upper() + "_" + task_coordinator_address + "_DINTaskAuditor_Contract_Address"
+        )
         if not contract_address:
-            typer.Exit(1)
-        console.print(f"Using DINTaskAuditor address: {contract_address} from env variable {effective_network.upper()}_{task_coordinator_address}_DINTaskAuditor_Contract_Address in {os.getcwd()}/.env")
+            console.print(
+                f"[bold red]✗ DINTaskAuditor address not found.[/bold red]\n"
+                f"  Set [cyan]{effective_network.upper()}_{task_coordinator_address}_DINTaskAuditor_Contract_Address[/cyan] in [cyan]{os.getcwd()}/.env[/cyan]."
+            )
+            raise typer.Exit(1)
+        console.print(
+            f"[bold green] ✓ Using DINTaskAuditor Address: {contract_address} "
+            f"(from {os.getcwd()}/.env)[/bold green]"
+        )
 
     build_and_send_tx(
         ctx,

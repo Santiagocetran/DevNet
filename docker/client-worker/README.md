@@ -22,7 +22,7 @@ Before running the container, the host `dincli` should prepare the model cache:
 
 1. `cache_manifest(model_id, network, update=True)` downloads/refreshes `manifest.json`.
 2. `ensure_file_exists(...)` downloads the client service and model architecture files from the manifest.
-3. The client dataset is present under the model cache, for example:
+3. The client dataset should be available under the model cache, for example:
 
 ```text
 /home/azureuser/.cache/dincli/local/model_0/dataset/clients/<wallet-address>/data.pt

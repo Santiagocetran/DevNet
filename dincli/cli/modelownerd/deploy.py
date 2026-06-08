@@ -4,7 +4,7 @@ import typer
 
 from dincli.cli.contract_utils import get_contract_instance
 from dincli.cli.utils import (build_and_send_tx, get_env_key, load_din_info,
-                              set_env_key)
+                              resolve_task_coordinator_address, set_env_key)
 
 # Deploy sub-app (for 'dincli modelowner deploy ...')
 deploy_app = typer.Typer(help="Deploy task-level smart contracts")
@@ -64,14 +64,9 @@ def task_auditor(
         din_validator_stake_address = din_info[effective_network]["stake"]
 
     # Resolve DINTaskCoordinator address
-    if task_coordinator:
-        task_coordinator_address = task_coordinator
-    else:
-        task_coordinator_address = get_env_key(effective_network.upper()+"_DINTaskCoordinator_Contract_Address")
-        
-        if not task_coordinator_address:
-            console.print(f"[yellow]Please provide --task-coordinator in the command[/yellow]")
-            raise typer.Exit(1)
+    task_coordinator_address = resolve_task_coordinator_address(
+        effective_network, task_coordinator, console
+    )
     
     console.print(f"[bold green]Deploying DINTaskAuditor on network:[/bold green] {effective_network}")
     console.print(f"[cyan]Using DINValidatorStake address:[/cyan] {din_validator_stake_address}")

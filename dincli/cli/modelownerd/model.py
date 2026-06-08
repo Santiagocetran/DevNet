@@ -6,7 +6,7 @@ import typer
 from web3 import Web3
 
 from dincli.cli.utils import (build_and_send_tx, get_env_key, get_manifest_key,
-                               set_env_key)
+                               resolve_task_coordinator_address, set_env_key)
 from dincli.services.ipfs import retrieve_from_ipfs
 from dincli.services.cid_utils import get_bytes32_from_cid
 from dincli.services.modelowner import getGenesisModelIpfs, getscoreforGM
@@ -21,12 +21,9 @@ def create_genesis(
 ):
     effective_network, w3, account, console = ctx.obj.get_en_w3_account_console()
 
-    if not task_coordinator_address:
-        task_coordinator_address = get_env_key(effective_network.upper() + "_DINTaskCoordinator_Contract_Address")
-        if not task_coordinator_address:
-            raise typer.Exit(1)
-        else:
-            console.print(f"[bold green] Using DIN Task Coordinator Address: {task_coordinator_address} from {os.getcwd()}/.env[/bold green]")
+    task_coordinator_address = resolve_task_coordinator_address(
+        effective_network, task_coordinator_address, console
+    )
 
     if help:
         console.print("[bold green]Usage:[/bold green]")
@@ -37,7 +34,10 @@ def create_genesis(
         raise typer.Exit(0)
 
     task_dir = Path(os.getcwd()) / 'tasks' / effective_network.lower() / task_coordinator_address
-    os.makedirs(task_dir, exist_ok=True)
+    if not task_dir.exists():
+        console.print(f"[bold red]Task directory not found at {task_dir}[/bold red]")
+        console.print(f"[bold yellow]Please create the task directory first using: dincli model-owner task create-task-dir[/bold yellow]")
+        raise typer.Exit(1)
 
     target_manifest = os.path.join(task_dir, "manifest.json")
 
@@ -85,10 +85,9 @@ def submit_genesis(
 ):
     effective_network, w3, account, console = ctx.obj.get_en_w3_account_console()
 
-    if not task_coordinator_address:
-        task_coordinator_address = get_env_key(effective_network.upper() + "_DINTaskCoordinator_Contract_Address")
-        if not task_coordinator_address:
-            raise typer.Exit(1)
+    task_coordinator_address = resolve_task_coordinator_address(
+        effective_network, task_coordinator_address, console
+    )
     
     if help:
         console.print("[bold green]Usage:[/bold green]")

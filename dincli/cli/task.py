@@ -5,7 +5,8 @@ import typer
 from web3 import Web3
 
 from dincli.cli.utils import (build_and_send_tx, cache_manifest,
-                               get_env_key, GIstateToStr)
+                               get_env_key, GIstateToStr,
+                               resolve_task_coordinator_address)
 from dincli.services.ipfs import upload_to_ipfs
 from dincli.services.cid_utils import get_bytes32_from_cid, get_cid_from_bytes32
 
@@ -171,9 +172,9 @@ def register(
 
 
     if not taskCoordinator:
-        key = effective_network.upper() + "_DINTaskCoordinator_Contract_Address"
-        taskCoordinator = get_env_key(key)
-        console.print(f"[gray]Task Coordinator not provided, using {key} : {taskCoordinator} from {os.getcwd()}/.env[/gray]")
+        taskCoordinator = resolve_task_coordinator_address(
+            effective_network, None, console, verbose=True
+        )
 
     if not taskAuditor:
         key = effective_network.upper() + "_" + taskCoordinator + "_DINTaskAuditor_Contract_Address"

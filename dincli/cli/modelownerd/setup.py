@@ -2,7 +2,7 @@
 import typer
 
 from dincli.cli.contract_utils import erc20_abi
-from dincli.cli.utils import build_and_send_tx, get_env_key
+from dincli.cli.utils import build_and_send_tx, get_env_key, resolve_task_coordinator_address
 
 setup_app = typer.Typer(help="Setup commands")
 
@@ -27,11 +27,9 @@ def add_slasher(
 
 
     if not contract_address:
-        
-        contract_address = get_env_key(effective_network.upper() + "_DINTaskCoordinator_Contract_Address")
-
-        if not contract_address:
-            raise typer.Exit(1)
+        contract_address = resolve_task_coordinator_address(
+            effective_network, None, console
+        )
 
 
     # --- Print summary ---

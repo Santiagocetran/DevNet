@@ -20,7 +20,8 @@ from dincli.cli.utils import (CACHE_DIR, CONFIG_DIR, CONFIG_FILE,
                               SUPPORTED_IPFS_PROVIDERS, _get_password,
                               get_config, get_demo_private_key, get_env_key,
                               load_config, load_din_info, normalize_ipfs_provider,
-                              resolve_ipfs_config, save_config)
+                              resolve_ipfs_config, resolve_task_coordinator_address,
+                              save_config)
 
 dataset_app = typer.Typer(help="Manage federated datasets.")
 
@@ -602,10 +603,9 @@ def distribute_mnist(
     if (not task_coordinator_address or not task) and not model_id:
 
         if not task_coordinator_address:
-            task_coordinator_address = get_env_key(effective_network.upper() + "_DINTaskCoordinator_Contract_Address")
-            if not task_coordinator_address:
-                console.print("[red]❌ Both Task coordinator address and model ID not found in cli argument. Moreover, Task coordinator address not found in environment variable.[/red]")
-                raise typer.Exit(1)
+            task_coordinator_address = resolve_task_coordinator_address(
+                effective_network, None, console, exit_on_failure=True
+            )
 
     
     if model_id:
