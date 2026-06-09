@@ -4,8 +4,7 @@ from typing import Optional
 import typer
 
 from dincli.cli.utils import (CACHE_DIR, GIstateToStr, build_and_send_tx,
-                               get_manifest_key)
-from dincli.services.modelowner import getscoreforGM
+                               get_manifest_key, require_custom_manifest_service)
 from dincli.services.cid_utils import get_cid_from_bytes32
 
 gi_app = typer.Typer(help="Global iteration commands")
@@ -55,29 +54,24 @@ def start(
      # === 4. Accuracy Calculation ===
     manifest = get_manifest_key(effective_network, "getscoreforGM", model_id)
 
-    if manifest["type"] == "custom":
+    require_custom_manifest_service(manifest, "getscoreforGM")
 
-        # Retrieve required service files
-        service_path = model_base_path / manifest["path"]
-        model_arch_path = model_base_path / get_manifest_key(effective_network, "ModelArchitecture", model_id)["path"]
+    # Retrieve required service files
+    service_path = model_base_path / manifest["path"]
+    model_arch_path = model_base_path / get_manifest_key(effective_network, "ModelArchitecture", model_id)["path"]
 
+    ctx.obj.ensure_file_exists(service_path, manifest["ipfs"], "model owner service")
+    ctx.obj.ensure_file_exists(model_arch_path, get_manifest_key(effective_network, "ModelArchitecture", model_id)["ipfs"], "model architecture service")
+    ctx.obj.ensure_file_exists(genesis_model_path, get_manifest_key(effective_network, "Genesis_Model_CID", model_id), "genesis model")
 
-        ctx.obj.ensure_file_exists(service_path, manifest["ipfs"], "model owner service")
-        ctx.obj.ensure_file_exists(model_arch_path, get_manifest_key(effective_network, "ModelArchitecture", model_id)["ipfs"], "model architecture service")
-        ctx.obj.ensure_file_exists(genesis_model_path, get_manifest_key(effective_network, "Genesis_Model_CID", model_id), "genesis model")
+    # Validate test dataset
+    if not test_data_path.exists():
+        console.print(f"[red]❌ Test dataset missing:[/red] {test_data_path}")
+        raise typer.Exit(1)
 
-        # Validate test dataset
-        if not test_data_path.exists():
-            console.print(f"[red]❌ Test dataset missing:[/red] {test_data_path}")
-            raise typer.Exit(1)
+    fn = ctx.obj.load_custom_fn(service_path, "getscoreforGM")
 
-
-        fn = ctx.obj.load_custom_fn(service_path, "getscoreforGM")
-
-        accuracy = fn(curr_gi, gmcid, model_base_path)
-    else:
-         # Built-in scoring fallback
-        accuracy = getscoreforGM(curr_gi, gmcid, base_path=model_base_path)
+    accuracy = fn(curr_gi, gmcid, model_base_path)
 
     console.print(f"[bold]GM Accuracy (GI {curr_gi}):[/bold] {accuracy:.2f}%")
 

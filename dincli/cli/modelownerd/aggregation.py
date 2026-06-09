@@ -3,8 +3,8 @@ import time
 import typer
 from rich.table import Table
 
-from dincli.cli.utils import CACHE_DIR, build_and_send_tx, get_manifest_key
-from dincli.services.modelowner import getscoreforGM
+from dincli.cli.utils import (CACHE_DIR, build_and_send_tx, get_manifest_key,
+                               require_custom_manifest_service)
 from dincli.services.cid_utils import get_cid_from_bytes32
 
 aggregation_app = typer.Typer(help="Aggregation commands")
@@ -289,23 +289,20 @@ def close_t2_aggregation(
         modelowner_service_path = model_base_path / Path(manifest["path"])
         model_service_path = model_base_path / Path(get_manifest_key(effective_network, "ModelArchitecture", model_id)["path"])
 
-        if manifest["type"] == "custom":
-            ctx.obj.ensure_file_exists(modelowner_service_path, manifest["ipfs"], "modelowner service")
-            ctx.obj.ensure_file_exists(model_service_path, get_manifest_key(effective_network, "ModelArchitecture", model_id)["ipfs"], "model architecture service")
+        require_custom_manifest_service(manifest, "getscoreforGM")
+        ctx.obj.ensure_file_exists(modelowner_service_path, manifest["ipfs"], "modelowner service")
+        ctx.obj.ensure_file_exists(model_service_path, get_manifest_key(effective_network, "ModelArchitecture", model_id)["ipfs"], "model architecture service")
 
-            fn = ctx.obj.load_custom_fn(
-            modelowner_service_path,
-            "getscoreforGM")
+        fn = ctx.obj.load_custom_fn(
+        modelowner_service_path,
+        "getscoreforGM")
 
-            ctx.obj.ensure_file_exists(Path(model_base_path)/"models"/"genesis_model.pth", get_manifest_key(effective_network,"Genesis_Model_CID", model_id), "genesis model")
-            if not (Path(model_base_path)/"dataset"/"test"/"test_dataset.pt").exists():
-                console.print("[red]Error:[/red] Test dataset not found at ", str(Path(model_base_path)/"dataset"/"test"/"test_dataset.pt"))
-                console.print("[yellow]Warning:[/yellow] please ensure the test dataset is present at ", str(Path(model_base_path)/"dataset"/"test"/"test_dataset.pt"))
-                raise typer.Exit(1) 
-            accuracy = fn(curr_GI, finalCID, model_base_path)
-
-        else:
-            accuracy = getscoreforGM(curr_GI, finalCID)
+        ctx.obj.ensure_file_exists(Path(model_base_path)/"models"/"genesis_model.pth", get_manifest_key(effective_network,"Genesis_Model_CID", model_id), "genesis model")
+        if not (Path(model_base_path)/"dataset"/"test"/"test_dataset.pt").exists():
+            console.print("[red]Error:[/red] Test dataset not found at ", str(Path(model_base_path)/"dataset"/"test"/"test_dataset.pt"))
+            console.print("[yellow]Warning:[/yellow] please ensure the test dataset is present at ", str(Path(model_base_path)/"dataset"/"test"/"test_dataset.pt"))
+            raise typer.Exit(1) 
+        accuracy = fn(curr_GI, finalCID, model_base_path)
         console.print(f"[green]Accuracy:[/green] {accuracy}")
 
         # 4. Set Tier 2 score

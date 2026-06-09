@@ -4,8 +4,7 @@ from typing import Optional
 import typer
 from web3 import Web3
 
-from dincli.cli.utils import CACHE_DIR, build_and_send_tx
-from dincli.services.client import train_client_model_and_upload_to_ipfs
+from dincli.cli.utils import CACHE_DIR, build_and_send_tx, require_custom_manifest_service
 from dincli.services.cid_utils import get_bytes32_from_cid, get_cid_from_bytes32
 
 app = typer.Typer(help="Commands for DIN clients in DIN.")
@@ -52,34 +51,24 @@ def train_lms(
     client_service_path = model_base_dir / Path(manifest["path"])
     model_service_path = model_base_dir / Path(model_manifest["path"])
 
-    if manifest["type"] == "custom":
+    require_custom_manifest_service(manifest, "train_client_model_and_upload_to_ipfs")
+    ctx.obj.ensure_file_exists(client_service_path, manifest["ipfs"], "client service") 
+    ctx.obj.ensure_file_exists(model_service_path, model_manifest["ipfs"], "model architecture service")
 
-        ctx.obj.ensure_file_exists(client_service_path, manifest["ipfs"], "client service") 
-        ctx.obj.ensure_file_exists(model_service_path, model_manifest["ipfs"], "model architecture service")
+    fn = ctx.obj.load_custom_fn(
+        client_service_path,
+        "train_client_model_and_upload_to_ipfs",
+        runtime=runtime,
+    )
 
-        fn = ctx.obj.load_custom_fn(
-            client_service_path,
-            "train_client_model_and_upload_to_ipfs",
-            runtime=runtime,
-        )
-
-        client_model_ipfs_hash = fn(
-            genesis_model_ipfs_hash,
-            account.address,
-            effective_network,
-            initial_model_ipfs_hash=initial_model_ipfs_hash,
-            model_base_dir=model_base_dir,
-            gi=current_GI,
-        )
-    else:
-        client_model_ipfs_hash = train_client_model_and_upload_to_ipfs(
-            genesis_model_ipfs_hash,
-            account.address,
-            effective_network,
-            initial_model_ipfs_hash=initial_model_ipfs_hash,
-            runtime=runtime,
-            base_path=model_base_dir,
-        )
+    client_model_ipfs_hash = fn(
+        genesis_model_ipfs_hash,
+        account.address,
+        effective_network,
+        initial_model_ipfs_hash=initial_model_ipfs_hash,
+        model_base_dir=model_base_dir,
+        gi=current_GI,
+    )
 
     if submit:
         try:

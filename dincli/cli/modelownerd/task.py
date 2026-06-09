@@ -22,8 +22,8 @@ def create_task_dir(ctx: typer.Context, task_coordinator_address: str = typer.Op
     console.print(f"[cyan]Task directory:[/cyan] {task_dir}")
 
 
-@task_app.command("cache-default-manifest-services")
-def cache_default_manifest_services(
+@task_app.command("cache-default-artifacts")
+def cache_default_artifacts(
     ctx: typer.Context,
     task_coordinator_address: str = typer.Option(None, "--taskCoordinator", help="Task coordinator address"),
 ):
@@ -31,5 +31,15 @@ def cache_default_manifest_services(
     task_coordinator_address = resolve_task_coordinator_address(
         effective_network, task_coordinator_address, console
     )
+
+    task_dir = Path(os.getcwd()) / 'tasks' / effective_network.lower() / task_coordinator_address
+    if not task_dir.exists():
+        console.print(f"[bold red]Task directory not found at {task_dir}[/bold red]")
+        console.print(f"[bold yellow]Please create the task directory first using: dincli model-owner task create-task-dir[/bold yellow]")
+        raise typer.Exit(1)
+
+    
+
+
     # TODO: implement caching of default manifest services
     console.print("[yellow]cache-default-manifest-services not yet implemented.[/yellow]")

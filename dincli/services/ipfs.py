@@ -3,7 +3,7 @@ from pathlib import Path
 
 import requests
 from urllib.parse import quote
-
+from rich.console import Console
 from dincli.cli.log import logger
 from dincli.cli.utils import (
     FILEBASE_IPFS_ADD_URL,
@@ -13,6 +13,7 @@ from dincli.cli.utils import (
 )
 from dincli.services.cid_utils import get_cidv1base32_from_cid
 
+console = Console()
 
 def _ensure_file_exists(file_path: Path):
     if not file_path.exists():
@@ -164,10 +165,13 @@ def upload_to_ipfs(file_path, msg=None):
 
     try:
         if provider == "env":
+            console.print("[bold green]Uploading via Environment-backed IPFS...[/bold green]")
             cid = _upload_via_env(config, normalized_path)
         elif provider == "filebase":
+            console.print("[bold green]Uploading via Filebase...[/bold green]")
             cid = _upload_via_filebase(config, normalized_path)
         elif provider == "custom":
+            console.print("[bold green]Uploading via Custom IPFS provider...[/bold green]")
             cid = _upload_via_custom(config, normalized_path, msg)
         else:
             raise NotImplementedError(f"Unsupported IPFS provider: {provider}")

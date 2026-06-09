@@ -5,8 +5,7 @@ import typer
 from rich.table import Table
 from dincli.cli.dintoken import buy_dintokens, read_dintoken_stake, stake_dintokens
 from dincli.cli.utils import (CACHE_DIR, MIN_STAKE, build_and_send_tx,
-                               get_manifest_key)
-from dincli.services.auditor import Score_model_by_auditor
+                               get_manifest_key, require_custom_manifest_service)
 from dincli.services.cid_utils import get_cid_from_bytes32
 
 app = typer.Typer(help="Commands for Auditors in DIN.")
@@ -316,19 +315,15 @@ def evaluate_lms(
             auditor_service_path = model_base_dir / Path(manifest["path"])
             model_service_path = model_base_dir / Path(get_manifest_key(effective_network, "ModelArchitecture", model_id)["path"])
 
-            if manifest["type"] == "custom":
-
-                ctx.obj.ensure_file_exists(auditor_service_path, manifest["ipfs"],"auditor service")
-                ctx.obj.ensure_file_exists(model_service_path, get_manifest_key(effective_network, "ModelArchitecture", model_id)["ipfs"],"model service")
-           
-                fn = ctx.obj.load_custom_fn(
-                auditor_service_path,
-                "Score_model_by_auditor")
-                
-                score, eligible = fn(curr_GI, genesis_model_cid, batch_id, model_index, account.address, testDataCID, lm_cid, model_base_dir)
+            require_custom_manifest_service(manifest, "Score_model_by_auditor")
+            ctx.obj.ensure_file_exists(auditor_service_path, manifest["ipfs"],"auditor service")
+            ctx.obj.ensure_file_exists(model_service_path, get_manifest_key(effective_network, "ModelArchitecture", model_id)["ipfs"],"model service")
+       
+            fn = ctx.obj.load_custom_fn(
+            auditor_service_path,
+            "Score_model_by_auditor")
             
-            else:
-                score, eligible = Score_model_by_auditor(curr_GI, genesis_model_cid, batch_id, model_index, account.address, testDataCID, lm_cid, model_base_dir)
+            score, eligible = fn(curr_GI, genesis_model_cid, batch_id, model_index, account.address, testDataCID, lm_cid, model_base_dir)
 
             console.print(f"Score: {score}")
             console.print(f"Eligible: {eligible}")

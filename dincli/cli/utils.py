@@ -620,6 +620,21 @@ def get_manifest_key(network: str, key: str, model_id: int = None, task_coordina
     return manifest[key]
 
 
+def require_custom_manifest_service(manifest: dict, key: str) -> None:
+    if manifest.get("type") == "custom":
+        return
+
+    manifest_type = manifest.get("type", "<missing>")
+    console.print(
+        f"[bold red]Type of service function '{key}' in manifest must be custom; got '{manifest_type}'.[/bold red]"
+    )
+    console.print(
+        "[yellow]Built-in dincli service fallbacks are obsolete. "
+        "Add a custom service function with type custom and its ipfs entry to the model manifest.[/yellow]"
+    )   
+    raise typer.Exit(1)
+
+
 def is_ethereum_address(s: str) -> bool:
     """Check if string looks like a valid Ethereum address (case-insensitive, 42 chars, starts with 0x)."""
     return bool(re.fullmatch(r'0x[a-fA-F0-9]{40}', s))

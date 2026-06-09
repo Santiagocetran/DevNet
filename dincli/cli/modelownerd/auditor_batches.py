@@ -4,8 +4,7 @@ import typer
 from rich.table import Table
 from web3 import Web3
 
-from dincli.cli.utils import CACHE_DIR, build_and_send_tx, get_manifest_key
-from dincli.services.modelowner import create_audit_testDataCIDs
+from dincli.cli.utils import CACHE_DIR, build_and_send_tx, get_manifest_key, require_custom_manifest_service
 from dincli.services.cid_utils import get_bytes32_from_cid, get_cid_from_bytes32
 
 auditor_batches_app = typer.Typer(help="Auditor Batches commands")
@@ -127,24 +126,21 @@ def create_testdataset(
     manifest = get_manifest_key(effective_network, "create_audit_testDataCIDs", model_id)
     modelowner_service_path = model_base_path / Path(manifest["path"])
 
-    if manifest["type"] == "custom":
-        ctx.obj.ensure_file_exists(modelowner_service_path, manifest["ipfs"], "model owner service")
-        fn = ctx.obj.load_custom_fn(modelowner_service_path, "create_audit_testDataCIDs")
+    require_custom_manifest_service(manifest, "create_audit_testDataCIDs")
+    ctx.obj.ensure_file_exists(modelowner_service_path, manifest["ipfs"], "model owner service")
+    fn = ctx.obj.load_custom_fn(modelowner_service_path, "create_audit_testDataCIDs")
 
-        if test_data_path is None:
-            test_data_path = model_base_path / "dataset" / "test" / "test_dataset.pt"
-        else:
-            test_data_path = Path(test_data_path)
-
-        if not test_data_path.exists():
-            raise FileNotFoundError(
-                f"Test dataset not found at {test_data_path.resolve()}"
-            )
-        
-        audit_testDataCIDs = fn(audtor_batch_count, curr_GI, str(model_base_path), str(test_data_path))
-
+    if test_data_path is None:
+        test_data_path = model_base_path / "dataset" / "test" / "test_dataset.pt"
     else:
-        audit_testDataCIDs = create_audit_testDataCIDs(audtor_batch_count, curr_GI)
+        test_data_path = Path(test_data_path)
+
+    if not test_data_path.exists():
+        raise FileNotFoundError(
+            f"Test dataset not found at {test_data_path.resolve()}"
+        )
+    
+    audit_testDataCIDs = fn(audtor_batch_count, curr_GI, str(model_base_path), str(test_data_path))
     
     console.print("audit_testDataCIDs", audit_testDataCIDs)
     

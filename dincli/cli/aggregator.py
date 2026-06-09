@@ -4,8 +4,7 @@ import typer
 from rich.table import Table
 from dincli.cli.dintoken import buy_dintokens, read_dintoken_stake, stake_dintokens
 from dincli.cli.utils import (CACHE_DIR, MIN_STAKE, build_and_send_tx,
-                               get_manifest_key)
-from dincli.services.aggregator import get_aggregated_cid
+                               get_manifest_key, require_custom_manifest_service)
 from dincli.services.cid_utils import get_bytes32_from_cid, get_cid_from_bytes32
 
 app = typer.Typer(help="Commands for Aggregators in DIN.")
@@ -239,15 +238,13 @@ def aggregate_t1(
         aggregator_service_path = model_base_dir / Path(manifest["path"])
         model_service_path = model_base_dir / Path(get_manifest_key(effective_network, "ModelArchitecture", model_id)["path"])
 
-        if manifest["type"] == "custom":
-            ctx.obj.ensure_file_exists(aggregator_service_path, manifest["ipfs"], "aggregator service")
-            ctx.obj.ensure_file_exists(model_service_path, get_manifest_key(effective_network,"ModelArchitecture", model_id)["ipfs"], "model service")
+        require_custom_manifest_service(manifest, "get_aggregated_cid_t1")
+        ctx.obj.ensure_file_exists(aggregator_service_path, manifest["ipfs"], "aggregator service")
+        ctx.obj.ensure_file_exists(model_service_path, get_manifest_key(effective_network,"ModelArchitecture", model_id)["ipfs"], "model service")
 
-            fn = ctx.obj.load_custom_fn(aggregator_service_path, "get_aggregated_cid_t1")
-            
-            aggregated_cid = fn(curr_GI, account.address, model_cids, genesis_model_ipfs_hash, bid, model_base_dir)
-        else:
-            aggregated_cid = get_aggregated_cid(curr_GI, account.address, model_cids, genesis_model_ipfs_hash)
+        fn = ctx.obj.load_custom_fn(aggregator_service_path, "get_aggregated_cid_t1")
+        
+        aggregated_cid = fn(curr_GI, account.address, model_cids, genesis_model_ipfs_hash, bid, model_base_dir)
 
         console.print(f"Aggregated CID for T1 batch {bid} is {aggregated_cid}")
 
@@ -331,16 +328,13 @@ def aggregate_t2(
         aggregator_service_path = model_base_dir / Path(manifest["path"])
         model_service_path = model_base_dir / Path(get_manifest_key(effective_network, "ModelArchitecture", model_id)["path"])
   
-        if manifest["type"] == "custom":
-
-            ctx.obj.ensure_file_exists(aggregator_service_path, manifest["ipfs"], "aggregator service")
-            ctx.obj.ensure_file_exists(model_service_path, get_manifest_key(effective_network,"ModelArchitecture", model_id)["ipfs"], "model service")
-            
-            fn = ctx.obj.load_custom_fn(aggregator_service_path, "get_aggregated_cid_t2")
-            
-            aggregated_cid = fn(curr_GI, account.address, model_cids, genesis_model_ipfs_hash, bid, model_base_dir)
-        else:
-            aggregated_cid = get_aggregated_cid(curr_GI, account.address, model_cids, genesis_model_ipfs_hash)
+        require_custom_manifest_service(manifest, "get_aggregated_cid_t2")
+        ctx.obj.ensure_file_exists(aggregator_service_path, manifest["ipfs"], "aggregator service")
+        ctx.obj.ensure_file_exists(model_service_path, get_manifest_key(effective_network,"ModelArchitecture", model_id)["ipfs"], "model service")
+        
+        fn = ctx.obj.load_custom_fn(aggregator_service_path, "get_aggregated_cid_t2")
+        
+        aggregated_cid = fn(curr_GI, account.address, model_cids, genesis_model_ipfs_hash, bid, model_base_dir)
 
         if submit:
             try:

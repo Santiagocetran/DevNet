@@ -6,10 +6,10 @@ import typer
 from web3 import Web3
 
 from dincli.cli.utils import (build_and_send_tx, get_env_key, get_manifest_key,
+                               require_custom_manifest_service,
                                resolve_task_coordinator_address, set_env_key)
 from dincli.services.ipfs import retrieve_from_ipfs
 from dincli.services.cid_utils import get_bytes32_from_cid
-from dincli.services.modelowner import getGenesisModelIpfs, getscoreforGM
 
 model_app = typer.Typer(help="Model-level commands")
 
@@ -28,7 +28,7 @@ def create_genesis(
     if help:
         console.print("[bold green]Usage:[/bold green]")
         console.print("  dincli model-owner model create-genesis --network <network>")
-        console.print("\nIf --default flag is not specified, dincli will use getGenesisModelIpfs() from")
+        console.print("\ndincli will use custom getGenesisModelIpfs() from")
         console.print(f"{Path(os.getcwd()) / 'tasks' / effective_network.lower() / task_coordinator_address / 'services' / 'modelowner.py'}")
         console.print(f"The genesis model hash will be set in {os.getcwd()}/.env under {effective_network.upper() + '_' + task_coordinator_address}_GENESIS_MODEL_IPFS_HASH")
         raise typer.Exit(0)
@@ -51,18 +51,15 @@ def create_genesis(
     service_path = task_dir / Path(manifest["path"])
     model_service_path = task_dir / Path(get_manifest_key(effective_network, "ModelArchitecture", None, task_coordinator_address)["path"])
 
-    if manifest["type"] == "custom":
-
-        ctx.obj.ensure_file_exists(service_path, manifest["ipfs"], "model owner service")
-        ctx.obj.ensure_file_exists(model_service_path, get_manifest_key(effective_network, "ModelArchitecture", None, task_coordinator_address)["ipfs"], "model architecture service")
-        console.print("[bold green]Creating genesis model... [/bold green]")
-        fn = ctx.obj.load_custom_fn(
-            service_path,
-            "getGenesisModelIpfs"
-        )
-        model_hash = fn(task_dir)
-    else:
-        model_hash = getGenesisModelIpfs(base_path = task_dir)
+    require_custom_manifest_service(manifest, "getGenesisModelIpfs")
+    ctx.obj.ensure_file_exists(service_path, manifest["ipfs"], "model owner service")
+    ctx.obj.ensure_file_exists(model_service_path, get_manifest_key(effective_network, "ModelArchitecture", None, task_coordinator_address)["ipfs"], "model architecture service")
+    console.print("[bold green]Creating genesis model... [/bold green]")
+    fn = ctx.obj.load_custom_fn(
+        service_path,
+        "getGenesisModelIpfs"
+    )
+    model_hash = fn(task_dir)
     
     console.print(f"[bold green]Genesis model created successfully![/bold green]")
     console.print(f"[cyan]Model hash:[/cyan] {model_hash}")
@@ -79,7 +76,6 @@ def submit_genesis(
     ipfs_hash: str = typer.Option(None, "--ipfs-hash", help="IPFS hash of the model"),
     task_coordinator_address: str = typer.Option(None, "--taskCoordinator", help="Task coordinator address"),
     score: int = typer.Option(None, "--score", help="Score of the model"),
-    default: bool = typer.Option(False, "--default", help="use default service"),
     help: bool = typer.Option(False, "--help","-h", help="Show help"),
     default_test_data: bool = typer.Option(False, "--default-test-data", help="use default test data"),
 ):
@@ -92,7 +88,7 @@ def submit_genesis(
     if help:
         console.print("[bold green]Usage:[/bold green]")
         console.print("  dincli model-owner model submit-genesis --network <network>")
-        console.print("\nIf --default flag is not specified, dincli will use submitGenesisModel() from")
+        console.print("\ndincli will use custom getscoreforGM() from")
         console.print(f"{Path(os.getcwd()) / 'tasks' / effective_network.lower() / task_coordinator_address / 'services' / 'modelowner.py'}")
         console.print("\n [yellow]Warning:[/yellow] the test dataset must be available at: ")
         console.print(f"  {Path(os.getcwd()) / effective_network.lower() / 'tasks' / task_coordinator_address / 'dataset' / 'test' / 'test_dataset.pt'}")
@@ -117,40 +113,38 @@ def submit_genesis(
     if score:
         accuracy = score
     else:
-        if not default:
-            task_dir = Path.cwd() / 'tasks' / effective_network.lower()/ task_coordinator_address
 
-            manifest = get_manifest_key(effective_network, "getscoreforGM", None, task_coordinator_address)
-            service_path = task_dir / Path(manifest["path"])
-            model_service_path = task_dir / Path(get_manifest_key(effective_network, "ModelArchitecture", None, task_coordinator_address)["path"])
+        task_dir = Path.cwd() / 'tasks' / effective_network.lower()/ task_coordinator_address
 
-            if manifest["type"] == "custom":
-                ctx.obj.ensure_file_exists(service_path, manifest["ipfs"], "model owner service")
-                ctx.obj.ensure_file_exists(model_service_path, get_manifest_key(effective_network, "ModelArchitecture", None, task_coordinator_address)["ipfs"], "model architecture service")
+        manifest = get_manifest_key(effective_network, "getscoreforGM", None, task_coordinator_address)
+        service_path = task_dir / Path(manifest["path"])
+        model_service_path = task_dir / Path(get_manifest_key(effective_network, "ModelArchitecture", None, task_coordinator_address)["path"])
 
-                fn = ctx.obj.load_custom_fn(service_path, "getscoreforGM")
+        require_custom_manifest_service(manifest, "getscoreforGM")
+        ctx.obj.ensure_file_exists(service_path, manifest["ipfs"], "model owner service")
+        ctx.obj.ensure_file_exists(model_service_path, get_manifest_key(effective_network, "ModelArchitecture", None, task_coordinator_address)["ipfs"], "model architecture service")
 
-                test_dataset_path = task_dir.joinpath("dataset","test","test_dataset.pt")
-                if not test_dataset_path.exists():
-                    console.print(f"[bold red] X Test dataset not found at {test_dataset_path} [/bold red]")
-                    if default_test_data:
-                        default_test_dataset_ipfs_hash = "bafybeigjtcu2nzsffoy5pjmui25bnc43yduzn6aopi4wnrbtxfleqmw46y"
-                        console.print(f"[bold yellow] Y Using default test dataset with IPFS CID {default_test_dataset_ipfs_hash} [/bold yellow]")
-                        retrieve_from_ipfs(default_test_dataset_ipfs_hash, test_dataset_path)
-                    else:
-                        raise typer.Exit(1)
-                genesis_model_path = task_dir.joinpath("models","genesis_model.pth")
-                if not genesis_model_path.exists():
-                    console.print(f"[bold red] X Genesis model not found at {genesis_model_path} [/bold red]")
-                    raise typer.Exit(1)
-                
-                accuracy = fn(0, ipfs_hash, task_dir)
-                
-                if accuracy is None:
-                    console.print(f"[bold red] X Accuracy is None[/bold red]")
-                    raise typer.Exit(1)
-        else:
-            accuracy = getscoreforGM(0, ipfs_hash, base_path=Path(os.getcwd()) / "tasks" / effective_network.lower() / task_coordinator_address)
+        fn = ctx.obj.load_custom_fn(service_path, "getscoreforGM")
+
+        test_dataset_path = task_dir.joinpath("dataset","test","test_dataset.pt")
+        if not test_dataset_path.exists():
+            console.print(f"[bold red] X Test dataset not found at {test_dataset_path} [/bold red]")
+            if default_test_data:
+                default_test_dataset_ipfs_hash = "bafybeigjtcu2nzsffoy5pjmui25bnc43yduzn6aopi4wnrbtxfleqmw46y"
+                console.print(f"[bold yellow] Y Using default test dataset with IPFS CID {default_test_dataset_ipfs_hash} [/bold yellow]")
+                retrieve_from_ipfs(default_test_dataset_ipfs_hash, test_dataset_path)
+            else:
+                raise typer.Exit(1)
+        genesis_model_path = task_dir.joinpath("models","genesis_model.pth")
+        if not genesis_model_path.exists():
+            console.print(f"[bold red] X Genesis model not found at {genesis_model_path} [/bold red]")
+            raise typer.Exit(1)
+        
+        accuracy = fn(0, ipfs_hash, task_dir)
+        
+        if accuracy is None:
+            console.print(f"[bold red] X Accuracy is None[/bold red]")
+            raise typer.Exit(1)
 
     
     genesis_ipfs_hash_bytes32 = Web3.to_bytes(hexstr=get_bytes32_from_cid(ipfs_hash))
