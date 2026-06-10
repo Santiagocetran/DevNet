@@ -2,7 +2,9 @@ import os
 import typer
 from pathlib import Path
 
-from dincli.cli.utils import resolve_task_coordinator_address
+from dincli.cli.utils import resolve_task_coordinator_address, load_din_info
+
+from dincli.services.ipfs import retrieve_from_ipfs
 
 task_app = typer.Typer(help="task-level commands")
 
@@ -38,8 +40,42 @@ def cache_default_artifacts(
         console.print(f"[bold yellow]Please create the task directory first using: dincli model-owner task create-task-dir[/bold yellow]")
         raise typer.Exit(1)
 
+    services_dir = task_dir / "services"
+    os.makedirs(services_dir, exist_ok=True)
+
+    abis_dir = task_dir / "abis"
+    os.makedirs(abis_dir, exist_ok=True) 
+
+    try: 
+        retrieve_from_ipfs(load_din_info()[effective_network]["default_manifest"], task_dir / "manifest.json")
+        console.print(f"[bold green]Default manifest cached successfully! at {task_dir / 'manifest.json'}[/bold green]")
+    except Exception as e:
+        console.print(f"[bold red]Error caching default manifest: {e}[/bold red]")
+        raise typer.Exit(1)
+
+    for service_name, service_cid in load_din_info()[effective_network]["default_services"].items():
+        try:
+            retrieve_from_ipfs(service_cid, services_dir / service_name)
+            console.print(f"[bold green]Default service {service_name} cached successfully! at {services_dir / service_name}[/bold green]")
+        except Exception as e:
+            console.print(f"[bold red]Error caching default service {service_name}: {e}[/bold red]")
+            raise typer.Exit(1)
+    console.print(f"[bold green]Default services cached successfully! at {services_dir}[/bold green]")
+
+    for abi_name, abi_cid in load_din_info()[effective_network]["default_abis"].items():
+        try:
+            retrieve_from_ipfs(abi_cid, abis_dir / abi_name)
+            console.print(f"[bold green]Default abi {abi_name} cached successfully! at {abis_dir / abi_name}[/bold green]")
+        except Exception as e:
+            console.print(f"[bold red]Error caching default abi {abi_name}: {e}[/bold red]")
+            raise typer.Exit(1)
+    console.print(f"[bold green]Default abis cached successfully! at {abis_dir}[/bold green]")
+
+    console.print(f"[bold yellow]Important Instructions![/bold yellow]")
+    console.print(f"[bold yellow]1. Ensure to edit/modify the services as per your task/model specifications![/bold yellow]")
+    console.print(f"[bold yellow]2. Ensure to edit/modify the abis as per your task/model specifications![/bold yellow]")
+    console.print(f"[bold yellow]3. Upload the edited/modified services and abis to IPFS and update the manifest with the new CIDs! use dincli ipfs upload -f path/to/file to upload and get the CID, then update the manifest file with the new CID![/bold yellow]")
+    console.print(f"[bold yellow]4. Make sure to check/update other fields in the manifest as per your task/model specifications![/bold yellow]")
+    console.print(f"[bold yellow]5. Upload the edited/modified manifest to IPFS [/bold yellow]")
     
-
-
-    # TODO: implement caching of default manifest services
-    console.print("[yellow]cache-default-manifest-services not yet implemented.[/yellow]")
+        
