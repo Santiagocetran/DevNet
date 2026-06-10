@@ -71,11 +71,23 @@ def cache_default_artifacts(
             raise typer.Exit(1)
     console.print(f"[bold green]Default abis cached successfully! at {abis_dir}[/bold green]")
 
+    requirements_dir = task_dir / "requirements"
+    os.makedirs(requirements_dir, exist_ok=True)
+
+    for stakeholder_name, requirements_cid in load_din_info()[effective_network]["default_requirements"].items():
+        try:
+            retrieve_from_ipfs(requirements_cid, requirements_dir / stakeholder_name / "requirements.txt")
+            console.print(f"[bold green]Default requirements cached successfully! at {requirements_dir / stakeholder_name / 'requirements.txt'}[/bold green]")
+        except Exception as e:
+            console.print(f"[bold red]Error caching default requirements: {e}[/bold red]")
+            raise typer.Exit(1)
+
     console.print(f"[bold yellow]Important Instructions![/bold yellow]")
     console.print(f"[bold yellow]1. Ensure to edit/modify the services as per your task/model specifications![/bold yellow]")
     console.print(f"[bold yellow]2. Ensure to edit/modify the abis as per your task/model specifications![/bold yellow]")
-    console.print(f"[bold yellow]3. Upload the edited/modified services and abis to IPFS and update the manifest with the new CIDs! use dincli ipfs upload -f path/to/file to upload and get the CID, then update the manifest file with the new CID![/bold yellow]")
-    console.print(f"[bold yellow]4. Make sure to check/update other fields in the manifest as per your task/model specifications![/bold yellow]")
-    console.print(f"[bold yellow]5. Upload the edited/modified manifest to IPFS [/bold yellow]")
+    console.print(f"[bold yellow]3. Ensure to edit/modify the requirements as per your task/model specifications![/bold yellow]")
+    console.print(f"[bold yellow]4. Upload the edited/modified services, abis and requirements to IPFS and update the manifest with the new CIDs! use dincli ipfs upload -f path/to/file to upload and get the CID, then update the manifest file with the new CID![/bold yellow]")
+    console.print(f"[bold yellow]5. Make sure to check/update other fields in the manifest as per your task/model specifications![/bold yellow]")
+    console.print(f"[bold yellow]6. Upload the edited/modified manifest to IPFS [/bold yellow]")
     
         

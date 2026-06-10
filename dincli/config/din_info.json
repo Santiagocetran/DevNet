@@ -9,14 +9,20 @@
     "default_services": {
       "model.py": "bafybeieoovd7dofejqvc6i5nxcpz5r4ux7o7oakpo2h3gxv4657otpxfpi",
       "modelowner.py": "bafybeid7uipkcagk453qwogpnlasp3posijcztz26m77ki6comylibr6ym",
-      "client.py": "bafybeic5jekza5sxec2voknontekxfmz6snlhew3eb2nsyb6sb6qx6mhfe",
-      "auditor.py": "bafybeif4q2tfaexdflj3bd746ylrkwpprhsw4ozqayowrqtako72ij3zqa",
+      "client.py": "bafybeig4ie7qzikvye74jjm47evn4yit2gpdqfv3ya5cyc4mu665rvbpge",
+      "auditor.py": "bafybeih4v62h66446mbmivtalb5o43npdnaia4x2igkmwulmadxt3qnj3u",
       "aggregator.py": "bafybeialydfrws6jozf64maz65h772ms6ukc364gjjwslr2jfhvk7r7j2a",
       "scoring.py": "bafybeibpw777aa3q443va2ayatyt55p43sojpe3uf6vntwyxz3lbsidqqq"
     },
     "default_abis": {
       "DINTaskCoordinator.json": "bafybeiafytuzbxidxo7nrc6axzb2braxsbd57i6ckvp37npb6yntvpaqxe",
       "DINTaskAuditor.json": "bafybeifysyayopr2yng7qttryhzgo5obz7xdpapaeumszqtqtdqn6mzxla"
+    },
+    "default_requirements": {
+      "clients": "bafybeifolbr4ti734zwbgtu6alimwfl22y4sxsopprd2727rukvac6halm",
+      "auditors": "bafybeifolbr4ti734zwbgtu6alimwfl22y4sxsopprd2727rukvac6halm",
+      "aggregators": "bafybeifolbr4ti734zwbgtu6alimwfl22y4sxsopprd2727rukvac6halm",
+      "modelowner": "bafybeifolbr4ti734zwbgtu6alimwfl22y4sxsopprd2727rukvac6halm"
     }
   },
   "sepolia_op_devnet": {
