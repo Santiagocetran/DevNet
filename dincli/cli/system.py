@@ -16,10 +16,13 @@ from rich.prompt import Confirm
 from torchvision import datasets, transforms
 
 from dincli.cli.contract_utils import erc20_abi, router_abi
-from dincli.cli.utils import (CACHE_DIR, CONFIG_DIR, CONFIG_FILE,
+from dincli.cli.utils import (CACHE_DIR, CONFIG_DIR, 
+                              CONFIG_FILE, 
+                              print_tx_info,
                               SUPPORTED_IPFS_PROVIDERS, _get_password,
-                              get_config, get_demo_private_key, get_env_key,
-                              load_config, load_din_info, normalize_ipfs_provider,
+                              get_config, get_demo_private_key, 
+                              get_env_key, load_config, 
+                              load_din_info, normalize_ipfs_provider,
                               resolve_ipfs_config, resolve_task_coordinator_address,
                               save_config)
 
@@ -56,7 +59,7 @@ def system(
     ),
 ):
     # If the subcommand is one that doesn't need an account, we skip the default setup logic
-    if ctx.invoked_subcommand in ["connect-wallet", "init", "welcome", "where", "configure-network", "configure-demo", "read_wallet", "show_index", "din-info", "configure-logging", "dump-abi", "reset-all", "todo", "dataset"]:
+    if ctx.invoked_subcommand in ["connect-wallet", "init", "welcome", "where", "configure-network", "configure-demo", "read_wallet", "show_index", "din-info", "configure-logging", "dump-abi", "reset-all", "todo", "dataset", "send-eth"]:
         return
 
     effective_network, w3, account, console = ctx.obj.get_en_w3_account_console()
@@ -325,6 +328,75 @@ def read_wallet(ctx: typer.Context):
         console.print(f"[red]❌ {e}[/red]")
         raise typer.Exit(1)
 
+
+@app.command("send-eth")
+def send_eth(
+    ctx: typer.Context,
+    amount: str = typer.Option(..., "--amount", "-a", help="Amount of ETH to send (in ETH)"),
+    to: str = typer.Option(..., "--to", "-t", help="Recipient address"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
+):
+    """
+    Send ETH to an address.
+    """
+    effective_network, w3, account, console = ctx.obj.get_en_w3_account_console()
+
+    # Validate recipient address
+    try:
+        to = w3.to_checksum_address(to)
+    except Exception:
+        console.print(f"[bold red]✗ Invalid recipient address: {to}[/bold red]")
+        raise typer.Exit(1)
+
+    # Convert amount to wei
+    try:
+        amount_wei = w3.to_wei(amount, "ether")
+    except Exception as e:
+        console.print(f"[bold red]✗ Invalid amount '{amount}': {e}[/bold red]")
+        raise typer.Exit(1)
+
+    # Check sender balance
+    balance_wei = w3.eth.get_balance(account.address)
+    if balance_wei < amount_wei:
+        balance_eth = w3.from_wei(balance_wei, "ether")
+        console.print(f"[bold red]✗ Insufficient balance. Have {balance_eth} ETH, tried to send {amount} ETH.[/bold red]")
+        raise typer.Exit(1)
+
+    # Confirmation prompt
+    if not yes:
+        console.print(f"\n[bold yellow]  From:[/bold yellow] {account.address}")
+        console.print(f"[bold yellow]    To:[/bold yellow] {to}")
+        console.print(f"[bold yellow]Amount:[/bold yellow] {amount} ETH")
+        console.print(f"[bold yellow]   Net:[/bold yellow] {effective_network}\n")
+        confirmed = typer.confirm("Confirm transaction?")
+        if not confirmed:
+            console.print("[yellow]Aborted.[/yellow]")
+            raise typer.Exit(0)
+
+    # Build and send raw ETH transfer
+    try:
+        tx_params = ctx.obj.get_tx_params()
+        tx_params.update({"to": to, "value": amount_wei, "from": account.address})
+
+        tx_params["gas"] = int(w3.eth.estimate_gas(tx_params) * 1.1)
+
+        signed_tx = account.sign_transaction(tx_params)
+        console.print(f"[bold green]Sending {amount} ETH to {to}...[/bold green]")
+
+        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+        print_tx_info(tx_hash, effective_network)
+        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+        if receipt.status == 1:
+            console.print(f"[bold green] ✓ Successfully sent {amount} ETH to {to}[/bold green]")
+        else:
+            console.print(f"[bold red]✗ Transaction failed (reverted)[/bold red]")
+            raise typer.Exit(1)
+
+    except typer.Exit:
+        raise
+    except Exception as e:
+        console.print(f"[bold red]✗ Transaction failed: {e}[/bold red]")
+        raise typer.Exit(1)
 
 @app.command("show-index")
 def show_index(ctx: typer.Context,

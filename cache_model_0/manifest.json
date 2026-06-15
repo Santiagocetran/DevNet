@@ -56,6 +56,12 @@
          "max_disagreement_bps": 800
       }
    },
+   "gm_scoring_policy": {
+      "evaluation": {
+         "requires_test_dataset": true,
+         "dataset_mode": "path"
+      }
+   },
    "dp": {
       "enabled": false,
       "mode": "afterTraining",

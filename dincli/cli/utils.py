@@ -726,7 +726,7 @@ def build_and_send_tx(
         console.print(f"[bold green]{action_msg}...[/bold green]")
         tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
         if show_tx_hash:
-            console.print(f"[bold green]Transaction hash:[/bold green] {tx_hash.hex()}")
+            print_tx_info(tx_hash, effective_network)
         tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
         if tx_receipt.status == 1:
             console.print(f"[bold green] ✓ {success_msg}[/bold green]")
@@ -747,4 +747,18 @@ def build_and_send_tx(
             raise typer.Exit(1)
 
         return None
+    
+def print_tx_info(tx_hash, network=None, print_url = True):
+    #ensure tx_hash is hex string
+    if isinstance(tx_hash, bytes):
+        tx_hash_hex = tx_hash.hex()
+    else:
+        tx_hash_hex = tx_hash
+
+    #print tx url
+    console.print(f"[bold green]Transaction hash:[/bold green] {tx_hash_hex}")
+    if print_url:
+        din_info = load_din_info()
+        console.print(f"[bold green]Transaction url:[/bold green] [cyan]{din_info[network]['explorer']}/tx/{tx_hash_hex}[/cyan]")
+    
     
