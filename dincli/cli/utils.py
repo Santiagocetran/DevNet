@@ -761,4 +761,15 @@ def print_tx_info(tx_hash, network=None, print_url = True):
         din_info = load_din_info()
         console.print(f"[bold green]Transaction url:[/bold green] [cyan]{din_info[network]['explorer']}/tx/{tx_hash_hex}[/cyan]")
     
-    
+def _confirm_or_exit(question: str, instruction: str, console):
+    answer = input(f"{question} (y/n): ").strip().lower()
+
+    if answer in ("y", "yes"):
+        return
+
+    if answer in ("n", "no"):
+        console.print(f"[bold red]Error: {instruction}[/bold red]")
+        raise typer.Exit(1)
+
+    console.print("[bold red]Error: Please answer yes/y or no/n.[/bold red]")
+    raise typer.Exit(1)
