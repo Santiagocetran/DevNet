@@ -912,16 +912,34 @@ def configure_ipfs(ctx: typer.Context,
     elif selected_provider == "custom":
         ctx.obj.console.print(f"[cyan]Runtime source:[/cyan] {config['ipfs_service_path']}")
    
-@app.command("get-proprietary-fee")
-def get_proprietary_fee(ctx: typer.Context):
+@app.command("get-registry-fee")
+def get_registry_fee(
+    ctx: typer.Context,
+    fee_type: str = typer.Option(None, "--fee-type", "-f", help="Type of fee to retrieve [model-registry, manifest-update]"),
+    model_type: str = typer.Option(None, "--model-type", "-m", help="Type of model [proprietary, open-source]"),
+):
     effective_network, w3, account, console = ctx.obj.get_en_w3_account_console()
     
     DINModelRegistry_Contract = ctx.obj.get_deployed_din_registry_contract()
-    
-    proprietary_fee = DINModelRegistry_Contract.functions.proprietaryFeeL2().call()
 
-    wei_to_eth = w3.from_wei(proprietary_fee, 'ether')
-    console.print(f"[bold green]Proprietary fee: {wei_to_eth} ETH[/bold green]")
+    if fee_type == "model-registry" or fee_type is None:
+        if model_type == "proprietary" or model_type is None:
+            proprietary_fee = DINModelRegistry_Contract.functions.proprietaryFee().call()
+            wei_to_eth = w3.from_wei(proprietary_fee, 'ether')
+            console.print(f"[bold green]Proprietary fee for model-registry: {wei_to_eth} ETH[/bold green]")
+        if model_type == "open-source" or model_type is None:
+            open_source_fee = DINModelRegistry_Contract.functions.openSourceFee().call()
+            wei_to_eth = w3.from_wei(open_source_fee, 'ether')
+            console.print(f"[bold green]Open-source fee for model-registry: {wei_to_eth} ETH[/bold green]")
+    if fee_type == "manifest-update" or fee_type is None:
+        if model_type == "proprietary" or model_type is None:
+            proprietary_update_fee = DINModelRegistry_Contract.functions.proprietaryUpdateFee().call()
+            wei_to_eth = w3.from_wei(proprietary_update_fee, 'ether')
+            console.print(f"[bold green]Proprietary update fee for manifest-update: {wei_to_eth} ETH[/bold green]")
+        if model_type == "open-source" or model_type is None:
+            open_source_update_fee = DINModelRegistry_Contract.functions.openSourceUpdateFee().call()
+            wei_to_eth = w3.from_wei(open_source_update_fee, 'ether')
+            console.print(f"[bold green]Open-source update fee for manifest-update: {wei_to_eth} ETH[/bold green]")
 
 
 

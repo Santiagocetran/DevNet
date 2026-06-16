@@ -762,7 +762,7 @@ def print_tx_info(tx_hash, network=None, print_url = True):
         console.print(f"[bold green]Transaction url:[/bold green] [cyan]{din_info[network]['explorer']}/tx/{tx_hash_hex}[/cyan]")
     
 def _confirm_or_exit(question: str, instruction: str, console):
-    answer = input(f"{question} (y/n): ").strip().lower()
+    answer = console.input(f"[bold yellow]{question} (y/n):[/bold yellow] ").strip().lower()
 
     if answer in ("y", "yes"):
         return
