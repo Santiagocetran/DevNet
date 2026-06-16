@@ -15,6 +15,42 @@ deploy_app = typer.Typer(help="Deploy DIN smart contracts")
 app.add_typer(deploy_app, name="deploy")
 app.add_typer(registry_app, name="registry")
 
+
+def _request_status(processed: bool, approved: bool) -> str:
+    if not processed:
+        return "pending"
+    return "approved" if approved else "rejected"
+
+
+def _format_cid(value):
+    from dincli.services.cid_utils import get_cid_from_bytes32
+
+    try:
+        return get_cid_from_bytes32(value.hex())
+    except Exception:
+        return value.hex()
+
+
+def _print_model_request(console, w3, request_id: int, req):
+    console.print(f"[bold cyan]Model Registration Request {request_id}:[/bold cyan]")
+    console.print(f"  Requester: {req[0]}")
+    console.print(f"  Is Open Source: {req[1]}")
+    console.print(f"  Manifest CID: {_format_cid(req[2])}")
+    console.print(f"  Task Coordinator: {req[3]}")
+    console.print(f"  Task Auditor: {req[4]}")
+    console.print(f"  Fee Paid: {w3.from_wei(req[5], 'ether')} ETH")
+    console.print(f"  Status: {_request_status(req[6], req[7])}")
+    console.print(f"  Created At: {req[8]}")
+
+
+def _print_manifest_request(console, w3, request_id: int, req):
+    console.print(f"[bold cyan]Manifest Update Request {request_id}:[/bold cyan]")
+    console.print(f"  Model ID: {req[0]}")
+    console.print(f"  New Manifest CID: {_format_cid(req[1])}")
+    console.print(f"  Requester: {req[2]}")
+    console.print(f"  Fee Paid: {w3.from_wei(req[3], 'ether')} ETH")
+    console.print(f"  Status: {_request_status(req[4], req[5])}")
+
 @deploy_app.command()
 def din_coordinator(
     ctx: typer.Context,
@@ -221,8 +257,8 @@ def total_models(ctx: typer.Context,
     console.print(f"[bold green]Total models: {models_length}[/bold green]")
 
 
-@registry_app.command("approve-model")
-def approve_model(ctx: typer.Context, request_id: int = typer.Argument(..., help="Model request ID to approve")):
+@registry_app.command("approve-registration-request")
+def approve_registration_request(ctx: typer.Context, request_id: int = typer.Argument(..., help="Model request ID to approve")):
     DINModelRegistry_Contract = ctx.obj.get_deployed_din_registry_contract()
     build_and_send_tx(
         ctx, 
@@ -232,8 +268,8 @@ def approve_model(ctx: typer.Context, request_id: int = typer.Argument(..., help
         f"Failed to approve model request {request_id}"
     )
 
-@registry_app.command("reject-model")
-def reject_model(ctx: typer.Context, request_id: int = typer.Argument(..., help="Model request ID to reject")):
+@registry_app.command("reject-registration-request")
+def reject_registration_request(ctx: typer.Context, request_id: int = typer.Argument(..., help="Model request ID to reject")):
     DINModelRegistry_Contract = ctx.obj.get_deployed_din_registry_contract()
     build_and_send_tx(
         ctx, 
@@ -388,42 +424,48 @@ def set_dao_admin(ctx: typer.Context, new_admin: str = typer.Argument(..., help=
         "Failed to set DAO admin"
     )
 
-@registry_app.command("unprocessed-requests")
-def unprocessed_requests(ctx: typer.Context, req_type: str = typer.Option(None, "--type", "-t", help="Type of request: 'model' or 'manifest'")):
-    """Get all unprocessed Model and ManifestUpdate requests"""
+
+@registry_app.command("list-pending-requests")
+def list_pending_requests(ctx: typer.Context, req_type: str = typer.Option(None, "--type", "-t", help="Type of request: 'model' or 'manifest'")):
+    """Get all unprocessed Model and ManifestUpdate requests."""
     effective_network, w3, account, console = ctx.obj.get_en_w3_account_console()
     DINModelRegistry_Contract = ctx.obj.get_deployed_din_registry_contract()
+    normalized_type = req_type.lower() if req_type else None
 
-    if req_type == "model" or req_type is None:
-        console.print("[bold cyan]Unprocessed Model Requests:[/bold cyan]")
+    if normalized_type not in (None, "model", "manifest"):
+        console.print("[bold red]Invalid request type. Must be 'model' or 'manifest'.[/bold red]")
+        raise typer.Exit(1)
 
+    if normalized_type in (None, "model"):
+        console.print("[bold cyan]Pending Model Registration Requests:[/bold cyan]")
         totalModelRequests = DINModelRegistry_Contract.functions.totalModelRequests().call()
         found_model = False
         for idx in range(totalModelRequests):
             req = DINModelRegistry_Contract.functions.modelRequests(idx).call()
-            # req[6] is 'processed'
             if not req[6]:
-                console.print(f"  [green]Request ID {idx}[/green] - Requester: {req[0]}")
+                console.print(
+                    f"  [green]Request ID {idx}[/green] - Requester: {req[0]}, "
+                    f"Open Source: {req[1]}, Fee: {w3.from_wei(req[5], 'ether')} ETH"
+                )
                 found_model = True
         if not found_model:
-            console.print("  [gray]No unprocessed model requests[/gray]")
+            console.print("  [gray]No pending model registration requests[/gray]")
 
-    elif req_type == "manifest" or req_type is None:
-        console.print("\n[bold cyan]Unprocessed Manifest Update Requests:[/bold cyan]")
+    if normalized_type in (None, "manifest"):
+        console.print("[bold cyan]Pending Manifest Update Requests:[/bold cyan]")
         totalManifestRequests = DINModelRegistry_Contract.functions.totalManifestRequests().call()
         found_manifest = False
         for idx in range(totalManifestRequests):
             req = DINModelRegistry_Contract.functions.manifestRequests(idx).call()
-            # req[4] is 'processed'
             if not req[4]:
-                console.print(f"  [green]Request ID {idx}[/green] - Model ID: {req[0]}, Requester: {req[2]}")
+                console.print(
+                    f"  [green]Request ID {idx}[/green] - Model ID: {req[0]}, "
+                    f"Requester: {req[2]}, Fee: {w3.from_wei(req[3], 'ether')} ETH"
+                )
                 found_manifest = True
         if not found_manifest:
-            console.print("  [gray]No unprocessed manifest update requests[/gray]")
+            console.print("  [gray]No pending manifest update requests[/gray]")
 
-    else:
-        console.print("[bold red]Invalid request type. Must be 'model' or 'manifest'.[/bold red]")
-        raise typer.Exit(1)
 
 @registry_app.command("explore-request")
 def explore_request(
@@ -431,53 +473,29 @@ def explore_request(
     req_type: str = typer.Option(..., "--type", "-t", help="Type of request: 'model' or 'manifest'"),
     request_id: int = typer.Argument(..., help="Request ID to explore")
 ):
-    """Explore a specific ModelRequest or ManifestUpdateRequest"""
+    """Explore a specific ModelRequest or ManifestUpdateRequest."""
     effective_network, w3, account, console = ctx.obj.get_en_w3_account_console()
     DINModelRegistry_Contract = ctx.obj.get_deployed_din_registry_contract()
-    
-    from dincli.services.cid_utils import get_cid_from_bytes32
+    normalized_type = req_type.lower()
 
-    if req_type.lower() == 'model':
+    if normalized_type == "model":
         try:
             req = DINModelRegistry_Contract.functions.modelRequests(request_id).call()
-            console.print(f"[bold cyan]Model Request {request_id}:[/bold cyan]")
-            console.print(f"  Requester: {req[0]}")
-            console.print(f"  Is Open Source: {req[1]}")
-            
-            try:
-                manifest_cid = get_cid_from_bytes32(req[2].hex())
-            except Exception:
-                manifest_cid = req[2].hex()
-                
-            console.print(f"  Manifest CID: {manifest_cid}")
-            console.print(f"  Task Coordinator: {req[3]}")
-            console.print(f"  Task Auditor: {req[4]}")
-            console.print(f"  Fee Paid: {w3.from_wei(req[5], 'ether')} ETH")
-            console.print(f"  Processed: {req[6]}")
-            console.print(f"  Approved: {req[7]}")
-            import datetime
-            console.print(f"  Created At: {datetime.datetime.fromtimestamp(req[8])}")
-        except Exception as e:
+            _print_model_request(console, w3, request_id, req)
+            if req[6] and req[7]:
+                exists, model_id = DINModelRegistry_Contract.functions.getModelIdByTaskCoordinator(req[3]).call()
+                if exists:
+                    console.print(f"  Approved Model ID: {model_id}")
+        except Exception:
             console.print(f"[bold red]Failed to retrieve Model Request {request_id}. It may not exist.[/bold red]")
-            
-    elif req_type.lower() == 'manifest':
+            raise typer.Exit(1)
+    elif normalized_type == "manifest":
         try:
             req = DINModelRegistry_Contract.functions.manifestRequests(request_id).call()
-            console.print(f"[bold cyan]Manifest Update Request {request_id}:[/bold cyan]")
-            console.print(f"  Model ID: {req[0]}")
-            
-            try:
-                new_manifest_cid = get_cid_from_bytes32(req[1].hex())
-            except Exception:
-                new_manifest_cid = req[1].hex()
-                
-            console.print(f"  New Manifest CID: {new_manifest_cid}")
-            console.print(f"  Requester: {req[2]}")
-            console.print(f"  Fee Paid: {w3.from_wei(req[3], 'ether')} ETH")
-            console.print(f"  Processed: {req[4]}")
-            console.print(f"  Approved: {req[5]}")
-        except Exception as e:
+            _print_manifest_request(console, w3, request_id, req)
+        except Exception:
             console.print(f"[bold red]Failed to retrieve Manifest Update Request {request_id}. It may not exist.[/bold red]")
+            raise typer.Exit(1)
     else:
         console.print("[bold red]Invalid request type. Must be 'model' or 'manifest'.[/bold red]")
         raise typer.Exit(1)
