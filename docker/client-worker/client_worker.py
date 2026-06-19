@@ -62,9 +62,9 @@ def run(job_path: Path) -> int:
         manifest_path = Path(job.get("manifest_path", model_base_dir / "manifest.json"))
         manifest = read_json(manifest_path)
 
-        service_entry = manifest["train_client_model_and_upload_to_ipfs"]
+        service_entry = manifest["train_client_model"]
         service_path = model_base_dir / service_entry["path"]
-        train_fn = load_function(service_path, "train_client_model_and_upload_to_ipfs")
+        train_fn = load_function(service_path, "train_client_model")
 
         runtime = WorkerRuntime(
             network=job["network"],
@@ -72,7 +72,7 @@ def run(job_path: Path) -> int:
             manifest_path=manifest_path,
         )
 
-        cid = train_fn(
+        local_model_path = train_fn(
             job["genesis_model_ipfs_hash"],
             job["account_address"],
             job["network"],
@@ -86,7 +86,7 @@ def run(job_path: Path) -> int:
             output_path,
             {
                 "status": "ok",
-                "client_model_ipfs_hash": cid,
+                "local_model_path": local_model_path,
             },
         )
         return 0
