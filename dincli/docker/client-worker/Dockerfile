@@ -12,7 +12,7 @@ COPY dincli ./dincli
 
 RUN pip install --no-cache-dir -e .
 
-COPY docker/client-worker/client_worker.py /usr/local/bin/din-client-worker
+COPY dincli/docker/client-worker/client_worker.py /usr/local/bin/din-client-worker
 RUN chmod +x /usr/local/bin/din-client-worker
 
 WORKDIR /din

@@ -36,3 +36,6 @@ dincli = "dincli.main:app"
 [tool.setuptools.packages.find]
 where = ["."]  # look in project root
 include = ["dincli*"]  # only include dincli and subpackages
+
+[tool.setuptools.package-data]
+dincli = ["config/*.json", "abis/*", "docker/*"]

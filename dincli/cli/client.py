@@ -1,3 +1,6 @@
+import json
+import subprocess
+from importlib.resources import files
 from pathlib import Path
 from typing import Optional
 
@@ -11,6 +14,8 @@ from dincli.services.ipfs import upload_to_ipfs
 app = typer.Typer(help="Commands for DIN clients in DIN.")
 lms_app = typer.Typer(help="LMS related commands")
 app.add_typer(lms_app, name="lms")
+
+CLIENT_WORKER_IMAGE = "din-client-worker:dev"
 
 DISABLED_DP_MODES = {"disabled", "none", "off", "false"}
 DP_MECHANISM_ALIASES = {
@@ -47,6 +52,10 @@ def resolve_dp_config(manifest: dict) -> dict:
                 ),
             }
 
+    legacy_mode = str(manifest.get("dp_mode", "disabled")).strip().lower()
+    if legacy_mode in DISABLED_DP_MODES:
+        return {"enabled": False, "mechanism": "none"}
+
     return {
         "enabled": True,
         "mechanism": _normalize_dp_mechanism(
@@ -60,6 +69,102 @@ def get_local_model_path(model_base_dir: Path, account_address: str, gi: int, dp
     if dp_config["enabled"]:
         return client_model_dir / f"lm_{gi}_{dp_config['mechanism']}.pth"
     return client_model_dir / f"lm_{gi}.pth"
+
+
+def write_client_training_job(
+    model_base_dir: Path,
+    account_address: str,
+    effective_network: str,
+    genesis_model_ipfs_hash: str,
+    initial_model_ipfs_hash: Optional[str],
+    gi: int,
+) -> tuple[Path, Path]:
+    jobs_dir = model_base_dir / "jobs" / "clients" / account_address
+    output_dir = jobs_dir / f"client_lms_gi_{gi}_output"
+    jobs_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    job_path = jobs_dir / f"client_lms_gi_{gi}.json"
+    job = {
+        "network": effective_network,
+        "account_address": account_address,
+        "genesis_model_ipfs_hash": genesis_model_ipfs_hash,
+        "initial_model_ipfs_hash": initial_model_ipfs_hash,
+        "gi": gi,
+        "model_base_dir": "/din/model",
+        "manifest_path": "/din/model/manifest.json",
+        "output_path": "/din/output/result.json",
+    }
+    job_path.write_text(json.dumps(job, indent=2) + "\n", encoding="utf-8")
+    return job_path, output_dir
+
+
+def ensure_client_worker_image(console) -> None:
+    inspect_result = subprocess.run(
+        ["docker", "image", "inspect", CLIENT_WORKER_IMAGE],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if inspect_result.returncode == 0:
+        return
+
+    dincli_package_root = Path(str(files("dincli")))
+    dockerfile_path = dincli_package_root / "docker" / "client-worker" / "Dockerfile"
+    build_context = dincli_package_root.parent
+    console.print(f"Docker image {CLIENT_WORKER_IMAGE} not found. Building it now...")
+    build_result = subprocess.run(
+        [
+            "docker",
+            "build",
+            "-f",
+            str(dockerfile_path),
+            "-t",
+            CLIENT_WORKER_IMAGE,
+            str(build_context),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if build_result.stdout:
+        console.print(build_result.stdout)
+    if build_result.returncode != 0:
+        if build_result.stderr:
+            console.print(build_result.stderr)
+        raise RuntimeError(f"Failed to build Docker image {CLIENT_WORKER_IMAGE}")
+
+
+def run_client_worker_container(model_base_dir: Path, job_path: Path, output_dir: Path, model_id: int, gi: int):
+    container_name = f"din-client-worker-model-{model_id}-gi-{gi}"
+    cmd = [
+        "docker",
+        "run",
+        "--rm",
+        "--name",
+        container_name,
+        "--cpus",
+        "2",
+        "--memory",
+        "4g",
+        "--network",
+        "none",
+        "-v",
+        f"{model_base_dir.resolve()}:/din/model:rw",
+        "-v",
+        f"{job_path.resolve()}:/din/job/job.json:ro",
+        "-v",
+        f"{output_dir.resolve()}:/din/output:rw",
+        CLIENT_WORKER_IMAGE,
+    ]
+    return subprocess.run(cmd, text=True, capture_output=True, check=False)
+
+
+def read_client_worker_result(output_dir: Path) -> dict:
+    result_path = output_dir / "result.json"
+    if not result_path.exists():
+        raise FileNotFoundError(f"Client worker did not write result file at {result_path}")
+    return json.loads(result_path.read_text(encoding="utf-8"))
 
 
 @app.command("create-client-dataset-dir")
@@ -102,15 +207,9 @@ def train_lms(
     console.print("Using Genesis Model IPFS Hash: ", genesis_model_ipfs_hash)
 
     initial_model_ipfs_hash = None
-    t2_list = []
     if current_GI > 1:
-        t2_batches_count = 1
-        for i in range(t2_batches_count):
-            (bid, val, fin, cid_raw) = taskCoordinator_contract.functions.getTier2Batch(current_GI-1, i).call()
-            cid = get_cid_from_bytes32(cid_raw.hex()) if cid_raw and cid_raw != bytes(32) else None
-            t2_list.append(Tier2Batch(batch_id=bid, validators=val, finalized=fin, final_cid=cid))
-            t2_batch_gi_minus_1 = t2_list[0]
-            initial_model_ipfs_hash = t2_batch_gi_minus_1.final_cid
+        (_, _, _, cid_raw) = taskCoordinator_contract.functions.getTier2Batch(current_GI - 1, 0).call()
+        initial_model_ipfs_hash = get_cid_from_bytes32(cid_raw.hex()) if cid_raw and cid_raw != bytes(32) else None
 
     console.print("Using Latest Global Model IPFS Hash: ", initial_model_ipfs_hash)
 
@@ -153,7 +252,53 @@ def train_lms(
             console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(0)
 
-    _confirm_or_exit(f"Starting training a local model using containrized service. Are you sure that {client_dataset_path} is updated with your latest dataset? This may take a while. Do you want to continue?", "Abored by user.", console=console)
+    _confirm_or_exit(f"Creating a job to train a local model using containerized service. Are you sure that {client_dataset_path} is updated with your latest dataset? This may take a while. Do you want to continue?", "Aborted by user.", console=console)
+
+    job_path, output_dir = write_client_training_job(
+        model_base_dir=model_base_dir,
+        account_address=account.address,
+        effective_network=effective_network,
+        genesis_model_ipfs_hash=genesis_model_ipfs_hash,
+        initial_model_ipfs_hash=initial_model_ipfs_hash,
+        gi=current_GI,
+    )
+    console.print(f"Created client training job at {job_path}")
+
+    _confirm_or_exit("Starting training a local model using containerized service. This may take a while. Do you want to continue?", "Aborted by user.", console=console)
+
+    try:
+        ensure_client_worker_image(console)
+    except RuntimeError as e:
+        console.print(f"[bold red]{e}[/bold red]")
+        raise typer.Exit(1)
+
+    docker_result = run_client_worker_container(
+        model_base_dir=model_base_dir,
+        job_path=job_path,
+        output_dir=output_dir,
+        model_id=model_id,
+        gi=current_GI,
+    )
+
+    if docker_result.stdout:
+        console.print(docker_result.stdout)
+    if docker_result.returncode != 0:
+        if docker_result.stderr:
+            console.print(docker_result.stderr)
+        console.print("[bold red]Client worker container failed.[/bold red]")
+        raise typer.Exit(docker_result.returncode)
+
+    worker_result = read_client_worker_result(output_dir)
+    if worker_result.get("status") != "ok":
+        console.print(f"[bold red]Client worker failed:[/bold red] {worker_result.get('error')}")
+        traceback = worker_result.get("traceback")
+        if traceback:
+            console.print(traceback)
+        raise typer.Exit(1)
+
+    container_model_path = Path(worker_result["local_model_path"])
+    local_model_path = model_base_dir / container_model_path.relative_to("/din/model")
+    console.print(f"[bold green]Local model generated at {local_model_path}[/bold green]")
 
 
         

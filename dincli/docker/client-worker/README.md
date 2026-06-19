@@ -13,7 +13,7 @@ The worker receives only a mounted model cache, a mounted job file, and an outpu
 
 ```bash
 cd /home/azureuser/projects/devnet
-docker build -f docker/client-worker/Dockerfile -t din-client-worker:dev .
+docker build -f dincli/docker/client-worker/Dockerfile -t din-client-worker:dev .
 ```
 
 ## Host Preflight

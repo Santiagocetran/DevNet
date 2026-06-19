@@ -704,7 +704,7 @@ def distribute_mnist(
         console.print("[red]Number of clients must be < 10[/red]")
         raise typer.Exit(1)
 
-    print(f"[cyan]Using base dir:[/cyan] {base_dir}")
+    console.print(f"[cyan]Using base dir:[/cyan] {base_dir}")
 
     transform = transforms.Compose([
         transforms.ToTensor(),
