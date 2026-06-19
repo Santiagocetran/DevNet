@@ -233,7 +233,7 @@ def aggregate_t1(
 
         console.print(f"Aggregating Assigned T1 batch {bid} for aggregator {account.address} with model cids {model_cids} and genesis model cid {genesis_model_ipfs_hash}")
 
-        model_base_dir = Path(CACHE_DIR) / effective_network / f"model_{model_id}"
+        model_base_dir = ctx.obj.get_model_base_dir(model_id)
         manifest = get_manifest_key(effective_network, "get_aggregated_cid_t1", model_id)
         aggregator_service_path = model_base_dir / Path(manifest["path"])
         model_service_path = model_base_dir / Path(get_manifest_key(effective_network, "ModelArchitecture", model_id)["path"])
@@ -323,7 +323,7 @@ def aggregate_t2(
 
         console.print(f"Aggregating T2 batch {bid} for aggregator {account.address} with T1 final cids {model_cids} and genesis model cid {genesis_model_ipfs_hash}")
 
-        model_base_dir = Path(CACHE_DIR) / effective_network / f"model_{model_id}"
+        model_base_dir = ctx.obj.get_model_base_dir(model_id)
         manifest = get_manifest_key(effective_network, "get_aggregated_cid_t2", model_id)
         aggregator_service_path = model_base_dir / Path(manifest["path"])
         model_service_path = model_base_dir / Path(get_manifest_key(effective_network, "ModelArchitecture", model_id)["path"])

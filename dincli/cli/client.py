@@ -45,7 +45,7 @@ def train_lms(
 
     console.print("Using Latest Global Model IPFS Hash: ", initial_model_ipfs_hash)
 
-    model_base_dir = Path(CACHE_DIR) / effective_network / f"model_{model_id}"
+    model_base_dir = ctx.obj.get_model_base_dir(model_id)
     manifest = runtime.require_manifest_key("train_client_model_and_upload_to_ipfs")
     model_manifest = runtime.require_manifest_key("ModelArchitecture")
     client_service_path = model_base_dir / Path(manifest["path"])

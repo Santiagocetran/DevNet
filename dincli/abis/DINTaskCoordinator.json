@@ -919,6 +919,19 @@
           "internalType": "uint256",
           "name": "_GI",
           "type": "uint256"
+        }
+      ],
+      "name": "startGI",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "_GI",
+          "type": "uint256"
         },
         {
           "internalType": "uint256",

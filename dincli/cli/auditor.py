@@ -310,7 +310,7 @@ def evaluate_lms(
             lms = task_auditor_contract.functions.lmSubmissions(curr_GI, model_index).call()
             lm_cid = get_cid_from_bytes32(lms[1].hex())
 
-            model_base_dir = Path(CACHE_DIR) / effective_network / f"model_{model_id}"
+            model_base_dir = ctx.obj.get_model_base_dir(model_id)
             manifest = get_manifest_key(effective_network, "Score_model_by_auditor", model_id)
             auditor_service_path = model_base_dir / Path(manifest["path"])
             model_service_path = model_base_dir / Path(get_manifest_key(effective_network, "ModelArchitecture", model_id)["path"])

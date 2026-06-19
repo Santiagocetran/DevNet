@@ -1,14 +1,18 @@
 {
    "name": "mnist-digits",
    "version": "1.0.0",
-   "description": "MNIST model to detect digits",
+   "description": "MNIST model to detect digits 0-9",
    "author": "Umer Majeed (infinite Zero)",
    "technical details": "",
-   "Genesis_Model_CID": "bafybeiabvfkm46yerhp6ramctwdiqixzs472hekj2tj34x2q4hrhu777va",
-   "DINTaskCoordinator_Contract": "0xB52A53a86Aec43Efc597EBdf338502ab8635c769",
-   "DINTaskAuditor_Contract": "0xdB6259DD05A52D7b254763225Fc13cE852EFE3FA",
-   "scoring_policy": {
+   "Genesis_Model_CID": "bafybeia6hlf3dpptyomuufvswsqjawfr6dizqsuo7tj65wia27crwdgc2a",
+   "DINTaskCoordinator_Contract": "0x8464135c8F25Da09e49BC8782676a84730C318bC",
+   "DINTaskAuditor_Contract": "0x71C95911E9a5D330f4D621842EC243EE1343292e",
+   "audit_scoring_policy": {
       "spec_version": 1,
+      "pass_scoring": {
+         "enabled": true,
+         "threshold": 5
+      },
       "scenario": "labeled_holdout_classification",
       "admission_mode": "holdout_delta",
       "contribution_mode": "none",
@@ -72,10 +76,6 @@
          "laplace_scale": 0.35,
          "clip_scope": "per_layer"
       }
-   },
-   "abis": {
-      "DINTaskCoordinator_Contract": "bafyb123234123",
-      "DINTaskAuditor_Contract": "bafyb123234456"
    },
    "getGenesisModelIpfs": {
       "type": "custom",
@@ -152,5 +152,105 @@
       "auditors": "bafybeifolbr4ti734zwbgtu6alimwfl22y4sxsopprd2727rukvac6halm",
       "aggregators": "bafybeifolbr4ti734zwbgtu6alimwfl22y4sxsopprd2727rukvac6halm",
       "modelowner": "bafybeifolbr4ti734zwbgtu6alimwfl22y4sxsopprd2727rukvac6halm"
+   },
+   "task_contracts": {
+      "DINTaskCoordinator_Contract": {
+         "name": "DINTaskCoordinator",
+         "address": "0x8464135c8F25Da09e49BC8782676a84730C318bC",
+         "artifact": {
+            "type": "hardhat-artifact",
+            "path": "contracts/abis/DINTaskCoordinator.json",
+            "ipfs": null,
+            "stakeholders": [
+               "modelowner",
+               "auditors",
+               "aggregators",
+               "clients"
+            ]
+         },
+         "source": {
+            "path": "contracts/sources/DINTaskCoordinator.sol",
+            "ipfs": null
+         },
+         "compilation": {
+            "toolchain": "hardhat",
+            "solidity": "0.8.28",
+            "evm_version": "cancun",
+            "optimizer": {
+               "enabled": false,
+               "runs": 200
+            },
+            "config": {
+               "path": "contracts/compilation/hardhat.config.ts",
+               "ipfs": null
+            },
+            "sources": [
+               {
+                  "path": "contracts/sources/DINTaskCoordinator.sol",
+                  "ipfs": null
+               },
+               {
+                  "path": "contracts/sources/DINTaskAuditor.sol",
+                  "ipfs": null
+               },
+               {
+                  "path": "contracts/sources/DINShared.sol",
+                  "ipfs": null
+               }
+            ],
+            "dependencies": [
+               "@openzeppelin/contracts"
+            ]
+         }
+      },
+      "DINTaskAuditor_Contract": {
+         "name": "DINTaskAuditor",
+         "address": "0x71C95911E9a5D330f4D621842EC243EE1343292e",
+         "artifact": {
+            "type": "hardhat-artifact",
+            "path": "contracts/abis/DINTaskAuditor.json",
+            "ipfs": null,
+            "stakeholders": [
+               "modelowner",
+               "auditors",
+               "aggregators",
+               "clients"
+            ]
+         },
+         "source": {
+            "path": "contracts/sources/DINTaskAuditor.sol",
+            "ipfs": null
+         },
+         "compilation": {
+            "toolchain": "hardhat",
+            "solidity": "0.8.28",
+            "evm_version": "cancun",
+            "optimizer": {
+               "enabled": false,
+               "runs": 200
+            },
+            "config": {
+               "path": "contracts/compilation/hardhat.config.ts",
+               "ipfs": null
+            },
+            "sources": [
+               {
+                  "path": "contracts/sources/DINTaskCoordinator.sol",
+                  "ipfs": null
+               },
+               {
+                  "path": "contracts/sources/DINTaskAuditor.sol",
+                  "ipfs": null
+               },
+               {
+                  "path": "contracts/sources/DINShared.sol",
+                  "ipfs": null
+               }
+            ],
+            "dependencies": [
+               "@openzeppelin/contracts"
+            ]
+         }
+      }
    }
 }

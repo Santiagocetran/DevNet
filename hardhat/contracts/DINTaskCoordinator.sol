@@ -122,12 +122,22 @@ contract DINTaskCoordinator is Ownable {
     }
 
     function startGI(uint _GI, uint score) public onlyOwner {
+        _startGI(_GI, score, true);
+    }
+
+    function startGI(uint _GI) public onlyOwner {
+        _startGI(_GI, 0, false);
+    }
+
+    function _startGI(uint _GI, uint score, bool updatePassScore) internal {
         if (
             GIstate != GIstates.GenesisModelCreated &&
             GIstate != GIstates.GIended
         ) revert TC_GICannotBeStarted();
         if (_GI != GI + 1) revert TC_WrongGI();
-        dinTaskAuditorContract.updatePassScore(score);
+        if (updatePassScore) {
+            dinTaskAuditorContract.updatePassScore(score);
+        }
         GIstate = GIstates.GIstarted;
         GI++;
     }

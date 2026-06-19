@@ -50,6 +50,7 @@ def buy_dintokens(
 def stake_dintokens(
     ctx: typer.Context,
     amount: int,
+    name: str = "Account"
 ):
     effective_network, w3, account, console = ctx.obj.get_en_w3_account_console()
 
@@ -107,12 +108,12 @@ def stake_dintokens(
         console.print(f"[bold red]✗ Error staking DINTokens: {e}[/bold red]")
 
 
-def read_dintoken_stake(ctx: typer.Context):
+def read_dintoken_stake(ctx: typer.Context, name ="Account"):
     effective_network, w3, account, console = ctx.obj.get_en_w3_account_console()
     din_stake_contract = ctx.obj.get_deployed_din_stake_contract()
 
     stake = din_stake_contract.functions.getStake(account.address).call()
-    console.print("[bold green]DIN token stake:[/bold green] ", Web3.from_wei(stake, "ether"))
+    console.print(f"[bold green] {name}'s DIN token stake:[/bold green] ", Web3.from_wei(stake, "ether"), "DinTokens")
 
 
 @app.command(help="Buy DINTokens where amount is ETH to exchange for DINTokens")

@@ -135,7 +135,7 @@ def create_genesis_model(
 
 #delete-this-for-production
 @model_app.command("add-default-test-data")
-def add_default_test_data(ctx: typer.Context,     task_coordinator_address: str = typer.Option(None, "--taskCoordinator", help="Task coordinator address"),default_test_data: bool = typer.Option(False, "--default-test-data", help="use default test data")):
+def add_default_test_data(ctx: typer.Context,     task_coordinator_address: str = typer.Option(None, "--taskCoordinator", help="Task coordinator address"), model_id: int = typer.Option(None, "--model-id", help="Model ID"), default_test_data: bool = typer.Option(False, "--default-test-data", help="use default test data")):
     effective_network, w3, account, console = ctx.obj.get_en_w3_account_console()
 
     task_coordinator_address = resolve_task_coordinator_address(
@@ -145,7 +145,10 @@ def add_default_test_data(ctx: typer.Context,     task_coordinator_address: str 
     console.print("[bold green]Getting default test dataset ...[/bold green]")
     
 
-    task_dir = Path.cwd() / 'tasks' / effective_network.lower()/ task_coordinator_address
+    if model_id is not None:
+        task_dir = ctx.obj.get_model_base_dir(model_id)
+    elif task_coordinator_address is not None:
+        task_dir = Path.cwd() / 'tasks' / effective_network.lower()/ task_coordinator_address
     test_dataset_path = task_dir.joinpath("dataset","test","test_dataset.pt")
     if default_test_data:
         default_test_dataset_ipfs_hash = "bafybeigjtcu2nzsffoy5pjmui25bnc43yduzn6aopi4wnrbtxfleqmw46y"

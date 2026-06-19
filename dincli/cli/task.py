@@ -4,7 +4,7 @@ import json
 import typer
 from web3 import Web3
 
-from dincli.cli.utils import (build_and_send_tx, cache_manifest, _confirm_or_exit,
+from dincli.cli.utils import (CACHE_DIR, build_and_send_tx, cache_manifest, _confirm_or_exit,
                                get_env_key, GIstateToStr,
                                resolve_task_coordinator_address)
 from dincli.services.ipfs import upload_to_ipfs
@@ -286,7 +286,6 @@ def register_request(
         console.print(f"  Requester: {args['requester']}")
         console.print("  Status: pending")
         console.print("[yellow]The model is not registered until DIN DAO approves this request.[/yellow]")
-        console.print(f"  Transaction Hash: {tx_receipt.transactionHash.hex()}")
     else:
         console.print("[yellow]Warning: ModelRegistrationRequested event not found in receipt.[/yellow]")
 
@@ -313,7 +312,7 @@ def update_manifest_request(
     if not manifestCID:
         console.print("[gray]Manifest CID not provided, uploading manifest to IPFS...[/gray]")
         if not manifestpath:
-            manifestpath = Path(os.getcwd()) / "tasks" / effective_network.lower() / taskCoordinator / "manifest.json"
+            manifestpath = ctx.obj.get_model_base_dir(model_id) / "manifest.json"
             console.print(f"[gray]Custom manifest path not provided, using default manifest path: {manifestpath}[/gray]")
         if not os.path.exists(manifestpath):
             console.print(f"[red]Error:[/red] Manifest not found at path: {manifestpath}")
@@ -338,6 +337,12 @@ def update_manifest_request(
         else dinregistry_contract.functions.proprietaryUpdateFee().call()
     )
     console.print(f"[gray]Required fee: {w3.from_wei(required_fee, 'ether')} ETH[/gray]")
+
+    _confirm_or_exit(
+        "Proceed with submitting the manifest update request on-chain?",
+        "Manifest update request aborted by user.",
+        console,
+    )
 
     tx_receipt = build_and_send_tx(
         ctx,
@@ -399,7 +404,7 @@ def show_manifest_update_request(
 def my_requests(
     ctx: typer.Context,
     request_type: str = typer.Option(None, "--type", "-t", help="Type of request: [model, manifest]"),
-    include_processed: bool = typer.Option(False, "--include-processed", help="Include approved and rejected requests"),
+    include_processed: bool = typer.Option(False, "--include-processed", "--ip", help="Include approved and rejected requests"),
 ):
     effective_network, w3, account, console = ctx.obj.get_en_w3_account_console()
     dinregistry_contract = ctx.obj.get_deployed_din_registry_contract()

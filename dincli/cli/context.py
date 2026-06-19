@@ -15,9 +15,10 @@ from rich.console import Console
 
 from dincli.cli.contract_utils import get_contract_instance
 from dincli.cli.log import logger, logging
-from dincli.cli.utils import (GIstatestrToIndex, GIstateToStr, get_config,
-                              get_manifest_key, get_w3, load_account,
-                              load_config, load_din_info, resolve_network)
+from dincli.cli.utils import (CACHE_DIR, GIstatestrToIndex, GIstateToStr,
+                              get_config, get_manifest, get_manifest_key, get_w3,
+                              load_account, load_config, load_din_info,
+                              resolve_network)
 from dincli.services.ipfs import retrieve_from_ipfs
 from dincli.services.runtime import ServiceRuntimeContext, build_service_runtime_context
 
@@ -137,6 +138,126 @@ class DinContext:
             self.console.print("[bold green]✓ DIN Registry contract address:[/bold green] ", dinregistry_address)
         artifact_path = files("dincli").joinpath("abis", "DINModelRegistry.json")
         return get_contract_instance(str(artifact_path), self.network, dinregistry_address)
+
+    def _get_task_manifest_context(
+        self,
+        model_id: Optional[int],
+        taskCoordinator_address: Optional[str],
+    ) -> tuple[Optional[dict], Optional[Path]]:
+        # There are two places a task manifest can live, depending on how the
+        # command identifies the task:
+        #
+        # 1. model_id:
+        #    This is the normal "registered model" path. The manifest is cached
+        #    under the dincli cache directory after being resolved from the
+        #    model registry / manifest CID.
+        #
+        # 2. taskCoordinator_address:
+        #    This is the local task-authoring path used before or around task
+        #    registration. The manifest lives in the user's current workspace
+        #    under tasks/<network>/<coordinator-address>/manifest.json.
+        #
+        # Returning the base path alongside the manifest lets later code resolve
+        # manifest-relative paths such as contracts/abis/DINTaskCoordinator.json.
+        if model_id is not None:
+            # Registered model flow. get_manifest() also handles cache freshness
+            # checks for model IDs, so callers do not need to know whether the
+            # local manifest was already present or had to be refreshed first.
+            return (
+                get_manifest(self.network, model_id=model_id),
+                Path(CACHE_DIR) / self.network / f"model_{model_id}",
+            )
+
+        if taskCoordinator_address is not None:
+            # Local task flow. Here get_manifest() reads directly from the
+            # current project's tasks directory; the base path mirrors that
+            # location so manifest paths can be joined without special cases.
+            return (
+                get_manifest(
+                    self.network,
+                    task_coordinator_address=taskCoordinator_address,
+                ),
+                Path.cwd() / "tasks" / self.network.lower() / taskCoordinator_address,
+            )
+
+        # Some callers still pass only a raw contract address, especially for
+        # default system contracts. In that case there is no task manifest to
+        # consult, so the contract resolver must fall back to bundled ABIs.
+        return None, None
+
+    def _resolve_task_contract_artifact_path(
+        self,
+        contract_key: str,
+        default_abi_filename: str,
+        model_id: Optional[int],
+        taskCoordinator_address: Optional[str],
+    ) -> Path:
+        # Resolve the manifest and the directory that relative manifest paths
+        # should be based from. If neither a model_id nor a task coordinator is
+        # available, this returns (None, None) and we use the default ABI.
+        manifest_data, model_base_path = self._get_task_manifest_context(
+            model_id,
+            taskCoordinator_address,
+        )
+
+        # Bundled ABI fallback. This keeps old manifests working and prevents
+        # custom-contract support from breaking the default DIN task contracts.
+        default_artifact_path = files("dincli").joinpath("abis", default_abi_filename)
+
+        if not manifest_data or model_base_path is None:
+            return Path(str(default_artifact_path))
+
+        artifact_entry = None
+
+        # Preferred schema for custom task-level contracts:
+        #
+        # "task_contracts": {
+        #   "DINTaskCoordinator_Contract": {
+        #     "artifact": {"path": "contracts/abis/DINTaskCoordinator.json", ...},
+        #     "source": {...},
+        #     "compilation": {...}
+        #   }
+        # }
+        #
+        # The "artifact" key is preferred because these files may be full
+        # Hardhat artifacts, not only raw ABI JSON. "abi" is accepted as a
+        # friendly alias for manifests that name the same thing more narrowly.
+        task_contracts = manifest_data.get("task_contracts")
+        if isinstance(task_contracts, dict):
+            contract_entry = task_contracts.get(contract_key)
+            if isinstance(contract_entry, dict):
+                artifact_entry = (
+                    contract_entry.get("artifact")
+                    or contract_entry.get("abi")
+                )
+
+        if not isinstance(artifact_entry, dict):
+            # No structured manifest artifact was provided. This includes the
+            # legacy string-CID form, missing keys, or malformed entries.
+            return Path(str(default_artifact_path))
+
+        artifact_rel_path = artifact_entry.get("path")
+        if not artifact_rel_path:
+            # A custom artifact entry must provide a manifest-relative path.
+            # Without it, dincli cannot know where to cache/read the artifact.
+            return Path(str(default_artifact_path))
+
+        artifact_path = model_base_path / artifact_rel_path
+
+        # Ensure the artifact exists locally before constructing the Web3
+        # contract. If "ipfs" is present, ensure_file_exists also refreshes the
+        # file when the CID changes. If "ipfs" is None, it acts as a local file
+        # presence check, which is useful for task directories and local caches.
+        self.ensure_file_exists(
+            artifact_path,
+            artifact_entry.get("ipfs"),
+            f"{contract_key} ABI",
+        )
+
+        # get_contract_instance() accepts either a Hardhat artifact or a minimal
+        # {"abi": [...]} JSON file, so the resolver only needs to return the
+        # selected JSON path.
+        return artifact_path
     
     def get_deployed_din_task_coordinator_contract(self, verbose: bool = True, model_id: Optional[int] = None, taskCoordinator_address: Optional[str] = None):
 
@@ -148,7 +269,12 @@ class DinContext:
 
         if verbose:
             self.console.print("[bold green]✓ Task Coordinator contract address:[/bold green] ", taskCoordinator_address)
-        artifact_path = files("dincli").joinpath("abis", "DINTaskCoordinator.json")
+        artifact_path = self._resolve_task_contract_artifact_path(
+            "DINTaskCoordinator_Contract",
+            "DINTaskCoordinator.json",
+            model_id,
+            taskCoordinator_address,
+        )
         return get_contract_instance(str(artifact_path), self.network, taskCoordinator_address)
 
     def get_deployed_din_task_auditor_contract(self, verbose: bool = True, model_id: Optional[int] = None, taskAuditor_address: Optional[str] = None):
@@ -160,7 +286,12 @@ class DinContext:
 
         if verbose:
             self.console.print("[bold green]✓ Task Auditor contract address:[/bold green] ", taskAuditor_address)
-        artifact_path = files("dincli").joinpath("abis", "DINTaskAuditor.json")
+        artifact_path = self._resolve_task_contract_artifact_path(
+            "DINTaskAuditor_Contract",
+            "DINTaskAuditor.json",
+            model_id,
+            None,
+        )
         return get_contract_instance(str(artifact_path), self.network, taskAuditor_address)
 
     def build_service_runtime(
@@ -364,5 +495,5 @@ class DinContext:
             raise typer.Exit(1)
         return True
 
-
-        
+    def get_model_base_dir(self, model_id: int) -> Path:
+        return Path(CACHE_DIR) / self.network / f"model_{model_id}"
