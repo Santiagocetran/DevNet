@@ -8,20 +8,18 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Optional
 from rich.console import Console
-import numpy as np
-import torch
 import typer
 from eth_account import Account
 from rich.prompt import Confirm
-from torchvision import datasets, transforms
 
 from dincli.cli.contract_utils import erc20_abi, router_abi
-from dincli.cli.utils import (CACHE_DIR, CONFIG_DIR, 
-                              CONFIG_FILE, 
+from dincli.cli.utils import (CACHE_DIR, CONFIG_DIR,
+                              CONFIG_FILE,
                               print_tx_info,
                               SUPPORTED_IPFS_PROVIDERS, _get_password,
-                              get_config, get_demo_private_key, 
-                              get_env_key, load_config, 
+                              _confirm_or_exit,
+                              get_config, get_demo_private_key,
+                              get_env_key, load_cid_services, load_config,
                               load_din_info, normalize_ipfs_provider,
                               resolve_ipfs_config, resolve_task_coordinator_address,
                               save_config)
@@ -34,6 +32,7 @@ app = typer.Typer(help="System utilities for DIN CLI.")
 app.add_typer(dataset_app, name="dataset")
 
 WALLET_FILE = CONFIG_DIR / "wallet.json"
+
 
 def initialize_directories():
     """
@@ -673,29 +672,23 @@ def distribute_mnist(
     effective_network, w3, account, console = ctx.obj.get_en_w3_account_console(model_id)
 
     if (not task_coordinator_address or not task) and not model_id:
-
         if not task_coordinator_address:
             task_coordinator_address = resolve_task_coordinator_address(
                 effective_network, None, console, exit_on_failure=True
             )
 
-    
     if model_id:
-        base_dir = Path(CACHE_DIR)/effective_network.lower()/ f"model_{model_id}"
+        base_dir = ctx.obj.get_model_base_dir(model_id)
     elif task_coordinator_address:
-        base_dir = Path(os.getcwd())/"tasks"/effective_network.lower()/task_coordinator_address   
+        base_dir = Path(os.getcwd()) / "tasks" / effective_network.lower() / task_coordinator_address
+    else:
+        console.print("[red]❌ Model ID or task coordinator address is required.[/red]")
+        raise typer.Exit(1)
 
-    dataset_dir = base_dir / "dataset"
-    clients_dir = base_dir / "dataset" / "clients"
 
-    # Ensure directories exist
     if not test_train and not clients:
         console.print("[red]❌ Both train/test flag and clients flag not found in cli argument.[/red]")
         raise typer.Exit(1)
-    if test_train:
-        dataset_dir.mkdir(parents=True, exist_ok=True)
-    if clients:
-        clients_dir.mkdir(parents=True, exist_ok=True)
 
     if clients and num_clients <= 0:
         console.print("[red]Number of clients must be >= 1[/red]")
@@ -706,64 +699,73 @@ def distribute_mnist(
 
     console.print(f"[cyan]Using base dir:[/cyan] {base_dir}")
 
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))
-    ])
+    dataset_dir = base_dir / "dataset"
+    clients_dir = dataset_dir / "clients"
 
-    # Download MNIST
-    train_dataset = datasets.MNIST(root=dataset_dir, train=True, download=True, transform=transform)
-    test_dataset = datasets.MNIST(root=dataset_dir, train=False, download=True, transform=transform)
-
-    # Save raw datasets
-    (dataset_dir / "train").mkdir(parents=True, exist_ok=True)
-    (dataset_dir / "test").mkdir(parents=True, exist_ok=True)
-
-    if test_train:
-        torch.save(train_dataset, dataset_dir / "train" / "train_dataset.pt")
-        torch.save(test_dataset, dataset_dir / "test" / "test_dataset.pt")
-        console.print(f"[green]Processed Train/Test Datasets saved successfully to {dataset_dir}![/green]")
+    accounts_list = []
     if clients:
-        # IID SPLIT
-        total_samples = len(train_dataset)
-        indices = np.arange(total_samples)
-
-        np.random.seed(seed)
-        np.random.shuffle(indices)
-
-        partitions = np.array_split(indices, num_clients)
-
-        accounts_list = []
-
         demo_mode = get_config("demo_mode")
-
         if not start_client_index:
             start_client_index = 2
 
         for i in range(num_clients):
-
             if demo_mode:
-                private_key = get_demo_private_key(i+start_client_index)
+                private_key = get_demo_private_key(i + start_client_index)
             else:
-                private_key = get_env_key("ETH_PRIVATE_KEY_"+str(i+start_client_index))
-                
+                private_key = get_env_key("ETH_PRIVATE_KEY_" + str(i + start_client_index))
+
             acct = Account.from_key(private_key)
             accounts_list.append(acct.address)
 
-        for i, idxs in enumerate(partitions):
-            client_path = clients_dir / accounts_list[i]
-            client_path.mkdir(parents=True, exist_ok=True)
 
-            # Extract subset
-            subset_data = [(train_dataset[idx][0], train_dataset[idx][1]) for idx in idxs]
+    service_entry = load_cid_services()["services"]["distribute_mnist"]
+    service_path = base_dir / service_entry["path"].lstrip("/")
+    requirements_path = base_dir / "requirements" / "distribute_mnist.txt"
 
-            save_path = client_path / "data.pt"
-            torch.save(subset_data, save_path)
+    ctx.obj.ensure_file_exists(service_path, service_entry["ipfs"], "distribute_mnist service")
+    ctx.obj.ensure_file_exists(requirements_path, service_entry["requirements"], "distribute_mnist requirements")
 
-            console.print(f"[green]Saved client_{i} ({len(subset_data)} samples) → {save_path}[/green]")
+    _confirm_or_exit(
+        f"Have you installed the required dependencies via `pip install -r {requirements_path}`?",
+        f"Please install the required dependencies first: pip install -r {requirements_path}",
+        console,
+    )
 
+    # -----------------------------------------------------------------------
+    # Scenario A – save raw train/test datasets
+    # -----------------------------------------------------------------------
+    if test_train:
+        console.print("[cyan]Processing Train/Test Datasets...[/cyan]")
+        try:
+            save_test_train_fn = ctx.obj.load_custom_fn(service_path, "save_test_train_datasets")
+            save_test_train_fn(base_dir=base_dir)
+        except Exception as e:
+            console.print(f"[bold red]Error saving train/test datasets: {e}[/bold red]")
+            raise typer.Exit(1)
+        console.print(f"[green]Processed Train/Test Datasets saved successfully to {dataset_dir}![/green]")
+
+    # -----------------------------------------------------------------------
+    # Scenario B – distribute data to clients
+    # -----------------------------------------------------------------------
+    if clients:
+        console.print("[cyan]Processing Client Datasets... This may take a while.[/cyan]")
+        try:
+            distribute_to_clients_fn = ctx.obj.load_custom_fn(service_path, "distribute_to_clients")
+            result = distribute_to_clients_fn(
+                base_dir=base_dir,
+                accounts_list=accounts_list,
+                num_clients=num_clients,
+                seed=seed,
+            )
+        except Exception as e:
+            console.print(f"[bold red]Error distributing MNIST to clients: {e}[/bold red]")
+            raise typer.Exit(1)
+        for item in result["client_datasets"]:
+            console.print(
+                f"[green]Saved client_{item['client_index']} ({item['num_samples']} samples) → {item['path']}[/green]"
+            )
         console.print(f"[bold green]✅ MNIST distributed to {num_clients} clients under {clients_dir}[/bold green]")
-    
+
 @app.command("dump-abi")
 def dump_abi(
     ctx: typer.Context,

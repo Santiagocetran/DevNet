@@ -399,6 +399,11 @@ def load_din_info() -> dict:
     with open(path) as f:
         return json.load(f)
 
+def load_cid_services() -> dict:
+    path = files("dincli").joinpath("config", "cid_services.json")
+    with open(path) as f:
+        return json.load(f)
+
 def save_din_info(data: dict):
     path = files("dincli").joinpath("config", "din_info.json")
     with open(path, "w") as f:
