@@ -162,6 +162,9 @@ def get_env_key(key: str, default: Optional[str] = None, verbose: bool = True) -
                 console.print(f"[bold red] ❌ {key} not found in {os.getcwd()}/.env file[/bold red]")
         return values.get(key, default)
 
+    if not HAS_DOTENV and verbose:  
+        console.print("[yellow]Warning: python-dotenv not installed. Cannot save to .env[/yellow]")
+
     return default
 
 
@@ -233,9 +236,10 @@ def resolve_network_value(
     )
     
         
-def get_w3(effective_network):  
+def get_w3(effective_network): 
+    rpc_url = resolve_network_value(effective_network,"rpc_url") 
     try:  
-        rpc_url = resolve_network_value(effective_network,"rpc_url")
+        
         w3 = Web3(Web3.HTTPProvider(rpc_url))
         if not w3.is_connected():
             raise ConnectionError(f"Could not connect to Ethereum node at {rpc_url}")

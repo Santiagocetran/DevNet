@@ -1,14 +1,14 @@
 """Client-side local training service for the DevNet reference model.
 
 This module is loaded dynamically by `dincli` for the manifest entry
-`train_client_model_and_upload_to_ipfs`. The function exposed at the bottom of
+`train_client_model`. The function exposed at the bottom of
 the file is responsible for:
 
-1. Fetching the genesis or latest global model from IPFS.
+1. Fetching the genesis or latest global model from mount
 2. Loading the client dataset from the cache directory.
 3. Training a local model for the current round.
 4. Optionally applying a manifest-selected differential privacy mechanism.
-5. Uploading the resulting state_dict back to IPFS.
+5. Generate the local model
 
 The DP helpers are deliberately kept framework-light and pure PyTorch so the
 service can run without extra privacy libraries such as Opacus. The current
@@ -26,9 +26,6 @@ import torch.nn as nn
 import torch.optim as optim
 from rich.console import Console
 from torch.utils.data import DataLoader
-
-from dincli.services.ipfs import retrieve_from_ipfs, upload_to_ipfs
-
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # The genesis model file stores the serialized model object. Importing the class
@@ -386,7 +383,7 @@ def apply_dp_mechanism(trained_state_dict, dp_config, reference_state_dict=None)
     raise ValueError(f"Unsupported DP mechanism '{mechanism}'")
 
 
-def train_client_model_and_upload_to_ipfs(
+def train_client_model(
     genesis_model_ipfs_hash,
     account_address,
     effective_network="local",
@@ -407,10 +404,11 @@ def train_client_model_and_upload_to_ipfs(
     model_base_dir = Path(model_base_dir)
     dp_config = resolve_dp_config(runtime=runtime)
 
-    # Always refresh the genesis model file locally from IPFS so the client has
-    # the base model object needed for deserialization and potential fallback.
-    retrieve_from_ipfs(genesis_model_ipfs_hash, model_base_dir / "models" / "genesis_model.pth")
-    console.print("Retrieved genesis model from IPFS")
+    genesis_model_path = model_base_dir / "models" / "genesis_model.pth"
+    if not genesis_model_path.exists():
+        raise FileNotFoundError(f"Genesis model not found at {genesis_model_path}")
+
+    
 
     # Load the serialized model object, not just a raw state_dict. This matches
     # the existing DevNet model-owner flow where the genesis artifact is saved
@@ -440,7 +438,9 @@ def train_client_model_and_upload_to_ipfs(
     # directly from the genesis model.
     starting_model_label = "genesis model"
     if initial_model_ipfs_hash:
-        retrieve_from_ipfs(initial_model_ipfs_hash, model_base_dir / "models" / f"gm_{gi-1}.pt")
+        initial_model_path = model_base_dir / "models" / f"gm_{gi-1}.pt"
+    if not initial_model_path.exists():
+        raise FileNotFoundError(f"Initial global model not found at {initial_model_path}")
         model_architecture.load_state_dict(
             torch.load(model_base_dir / "models" / f"gm_{gi-1}.pt", weights_only=True)
         )
@@ -480,12 +480,7 @@ def train_client_model_and_upload_to_ipfs(
     # If DP is disabled, the raw locally trained weights are the submission
     # artifact and we can upload them immediately.
     if not dp_config["enabled"]:
-        client_model_ipfs_hash = upload_to_ipfs(
-            raw_model_path,
-            f"Client {account_address} model uploaded to IPFS",
-        )
-        console.print(f"Client {account_address} model uploaded to IPFS with hash: {client_model_ipfs_hash}")
-        return client_model_ipfs_hash
+        return str(raw_model_path)
 
     # The current DevNet implementation only supports post-training privacy
     # application. Anything else should fail loudly rather than silently ignore
@@ -515,12 +510,4 @@ def train_client_model_and_upload_to_ipfs(
     )
 
     # Upload the private artifact, not the raw one.
-    client_model_ipfs_hash = upload_to_ipfs(
-        private_model_path,
-        f"Private client {account_address} model uploaded to IPFS",
-    )
-    console.print(
-        f"Private client model ({dp_config['mechanism']}) uploaded to IPFS with hash: {client_model_ipfs_hash}"
-    )
-
-    return client_model_ipfs_hash
+    return str(private_model_path)

@@ -104,7 +104,7 @@
          "clients"
       ]
    },
-   "train_client_model_and_upload_to_ipfs": {
+   "train_client_model": {
       "type": "custom",
       "path": "services/client.py",
       "ipfs": "bafybeic5jekza5sxec2voknontekxfmz6snlhew3eb2nsyb6sb6qx6mhfe",
@@ -160,7 +160,7 @@
          "artifact": {
             "type": "hardhat-artifact",
             "path": "contracts/abis/DINTaskCoordinator.json",
-            "ipfs": null,
+            "ipfs": "bafybeickgth755xv6gxx2jlbtrk4bdc7jjqhoqbvpy56k7v4sups6w6cre",
             "stakeholders": [
                "modelowner",
                "auditors",

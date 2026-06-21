@@ -6,7 +6,7 @@
     "representative": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
     "registry": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
     "explorer": "https://sepolia-optimism.etherscan.io",
-    "default_manifest": "bafybeigqmarrtpgzezzsjp4zfnsogtfajnebllvhmbg23h2l3muxj6kntq",
+    "default_manifest": "bafybeibu7s43gw7kn4q2iwnkyyjjkkb7y4qhefeojzaw6g6hts6fhhe4ka",
     "default_services": {
       "model.py": "bafybeieoovd7dofejqvc6i5nxcpz5r4ux7o7oakpo2h3gxv4657otpxfpi",
       "modelowner.py": "bafybeid7uipkcagk453qwogpnlasp3posijcztz26m77ki6comylibr6ym",

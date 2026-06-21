@@ -239,8 +239,12 @@ def submit_genesis_model(
             if not genesis_model_path.exists():
                 console.print(f"[bold red] X Genesis model not found at {genesis_model_path} [/bold red]")
                 raise typer.Exit(1)
-            
-            accuracy = fn(0, ipfs_hash, task_dir)
+
+            try:
+                accuracy = fn(0, ipfs_hash, task_dir)
+            except Exception as e:
+                console.print(f"[bold red] X Accuracy calculation failed: {e} [/bold red]")
+                raise typer.Exit(1)
             
             if accuracy is None:
                 console.print(f"[bold red] X Accuracy is None[/bold red]")
@@ -251,6 +255,8 @@ def submit_genesis_model(
 
     genesis_ipfs_hash_bytes32 = Web3.to_bytes(hexstr=get_bytes32_from_cid(ipfs_hash))
 
+    _confirm_or_exit("\n Do you want to submit this genesis model to the blockchain? \n ", "You chose not to submit the genesis model to the blockchain.", console)
+    
     tx_receipt = build_and_send_tx(
         ctx,
         deployed_DINTaskCoordinatorContract.functions.setGenesisModelIpfsHash(genesis_ipfs_hash_bytes32),
