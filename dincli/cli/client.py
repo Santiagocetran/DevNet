@@ -1,3 +1,4 @@
+import hashlib
 import json
 import subprocess
 from importlib.resources import files
@@ -7,7 +8,7 @@ from typing import Optional
 import typer
 from web3 import Web3
 
-from dincli.cli.utils import CACHE_DIR, build_and_send_tx, require_custom_manifest_service, _confirm_or_exit
+from dincli.cli.utils import CACHE_DIR, DOCKER_CACHE_DIR, build_and_send_tx, require_custom_manifest_service, _confirm_or_exit
 from dincli.services.cid_utils import get_bytes32_from_cid, get_cid_from_bytes32
 from dincli.services.ipfs import upload_to_ipfs
 
@@ -135,7 +136,59 @@ def ensure_client_worker_image(console) -> None:
         raise RuntimeError(f"Failed to build Docker image {CLIENT_WORKER_IMAGE}")
 
 
-def run_client_worker_container(model_base_dir: Path, job_path: Path, output_dir: Path, model_id: int, gi: int):
+def get_client_requirements_path(model_base_dir: Path) -> Path:
+    return model_base_dir / "requirements" / "clients" / "requirements.txt"
+
+
+def get_client_packages_dir(network: str, model_id: int) -> Path:
+    return DOCKER_CACHE_DIR / network / f"model_{model_id}" / "client-packages"
+
+
+def ensure_client_packages_installed(requirements_path: Path, packages_dir: Path, console) -> Optional[Path]:
+    """Install whatever the model owner pinned in the manifest's clients requirements.txt.
+
+    Installed once per requirements.txt content (tracked by hash) into
+    DOCKER_CACHE_DIR, kept separate from the dincli cache so the install
+    container never touches manifest/service/wallet state.
+    """
+    if not requirements_path.exists():
+        return None
+
+    requirements_text = requirements_path.read_text(encoding="utf-8")
+    digest = hashlib.sha256(requirements_text.encode("utf-8")).hexdigest()
+    marker_path = packages_dir / ".requirements.sha256"
+    if marker_path.exists() and marker_path.read_text(encoding="utf-8").strip() == digest:
+        console.print(f"[green]✓ Client packages already installed at {packages_dir}[/green]")
+        return packages_dir
+
+    packages_dir.mkdir(parents=True, exist_ok=True)
+    console.print(f"Installing client requirements from {requirements_path} into {packages_dir} ...")
+    install_result = subprocess.run(
+        [
+            "docker", "run", "--rm",
+            "--entrypoint", "pip",
+            "-v", f"{requirements_path.resolve()}:/din/requirements.txt:ro",
+            "-v", f"{packages_dir.resolve()}:/din/packages:rw",
+            CLIENT_WORKER_IMAGE,
+            "install", "--no-cache-dir", "--target", "/din/packages", "-r", "/din/requirements.txt",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if install_result.stdout:
+        console.print(install_result.stdout)
+    if install_result.returncode != 0:
+        if install_result.stderr:
+            console.print(install_result.stderr)
+        raise RuntimeError("Failed to install client requirements into the worker packages cache.")
+
+    marker_path.write_text(digest, encoding="utf-8")
+    console.print(f"[bold green]Client packages ready at {packages_dir}[/bold green]")
+    return packages_dir
+
+
+def run_client_worker_container(model_base_dir: Path, job_path: Path, output_dir: Path, model_id: int, gi: int, packages_dir: Optional[Path] = None):
     container_name = f"din-client-worker-model-{model_id}-gi-{gi}"
     cmd = [
         "docker",
@@ -155,8 +208,15 @@ def run_client_worker_container(model_base_dir: Path, job_path: Path, output_dir
         f"{job_path.resolve()}:/din/job/job.json:ro",
         "-v",
         f"{output_dir.resolve()}:/din/output:rw",
-        CLIENT_WORKER_IMAGE,
     ]
+    if packages_dir is not None:
+        cmd += [
+            "-v",
+            f"{packages_dir.resolve()}:/din/packages:ro",
+            "-e",
+            "PYTHONPATH=/din/packages",
+        ]
+    cmd.append(CLIENT_WORKER_IMAGE)
     return subprocess.run(cmd, text=True, capture_output=True, check=False)
 
 
@@ -220,8 +280,24 @@ def train_lms(
     model_service_path = model_base_dir / Path(model_manifest["path"])
 
     require_custom_manifest_service(manifest, "train_client_model")
-    ctx.obj.ensure_file_exists(client_service_path, manifest["ipfs"], "client service") 
+    ctx.obj.ensure_file_exists(client_service_path, manifest["ipfs"], "client service")
     ctx.obj.ensure_file_exists(model_service_path, model_manifest["ipfs"], "model architecture service")
+
+    client_requirements_cid = runtime.get_manifest_key("requirements.txt", {}).get("clients")
+    requirements_path = get_client_requirements_path(model_base_dir)
+    packages_dir = None
+    if client_requirements_cid:
+        ctx.obj.ensure_file_exists(requirements_path, client_requirements_cid, "client requirements")
+        try:
+            ensure_client_worker_image(console)
+            packages_dir = ensure_client_packages_installed(
+                requirements_path,
+                get_client_packages_dir(effective_network, model_id),
+                console,
+            )
+        except RuntimeError as e:
+            console.print(f"[bold red]{e}[/bold red]")
+            raise typer.Exit(1)
 
     # Always refresh the genesis model file locally from IPFS so the client has
     # the base model object needed for deserialization and potential fallback.
@@ -266,18 +342,13 @@ def train_lms(
 
     _confirm_or_exit("Starting training a local model using containerized service. This may take a while. Do you want to continue?", "Aborted by user.", console=console)
 
-    try:
-        ensure_client_worker_image(console)
-    except RuntimeError as e:
-        console.print(f"[bold red]{e}[/bold red]")
-        raise typer.Exit(1)
-
     docker_result = run_client_worker_container(
         model_base_dir=model_base_dir,
         job_path=job_path,
         output_dir=output_dir,
         model_id=model_id,
         gi=current_GI,
+        packages_dir=packages_dir,
     )
 
     if docker_result.stdout:

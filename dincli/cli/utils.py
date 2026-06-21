@@ -24,6 +24,11 @@ console = Console()
 CONFIG_DIR = Path(user_config_dir("dincli"))
 CACHE_DIR = Path(user_cache_dir("dincli"))
 
+# Sibling cache used for docker-only artifacts (e.g. pip-installed client
+# packages). Kept separate from CACHE_DIR so containers never need read/write
+# access to the manifest/service/wallet cache that dincli itself manages.
+DOCKER_CACHE_DIR = Path(user_cache_dir("dincli-docker"))
+
 CONFIG_FILE = CONFIG_DIR / "config.json"
 WALLET_FILE = CONFIG_DIR / "wallet.json"
 

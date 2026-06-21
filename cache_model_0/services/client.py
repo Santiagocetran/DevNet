@@ -416,8 +416,8 @@ def train_client_model(
 
     model_architecture = ModelArchitecture()
 
-    genesis_model = torch.load(model_base_dir / "models" / "genesis_model.pth", weights_only=True)
-    model_architecture.load_state_dict(genesis_model)
+    genesis_model = torch.load(model_base_dir / "models" / "genesis_model.pth", weights_only=False)
+    model_architecture.load_state_dict(genesis_model.state_dict())
 
     console.print(
         "Genesis model with IPFS hash "
@@ -439,10 +439,10 @@ def train_client_model(
     starting_model_label = "genesis model"
     if initial_model_ipfs_hash:
         initial_model_path = model_base_dir / "models" / f"gm_{gi-1}.pt"
-    if not initial_model_path.exists():
-        raise FileNotFoundError(f"Initial global model not found at {initial_model_path}")
+        if not initial_model_path.exists():
+            raise FileNotFoundError(f"Initial global model not found at {initial_model_path}")
         model_architecture.load_state_dict(
-            torch.load(model_base_dir / "models" / f"gm_{gi-1}.pt", weights_only=True)
+            torch.load(initial_model_path, weights_only=True)
         )
         starting_model_label = "initial global model"
         console.print("Initial model loaded and weights initialized from GM")
