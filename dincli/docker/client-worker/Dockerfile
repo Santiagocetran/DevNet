@@ -3,14 +3,12 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-WORKDIR /opt/din
-
 RUN python -m pip install --upgrade pip
 
-COPY pyproject.toml README.md MANIFEST.in ./
-COPY dincli ./dincli
-
-RUN pip install --no-cache-dir -e .
+# rich is the only base dependency client_worker.py / model-owner services can
+# rely on out of the box (for console output); everything else is whatever the
+# model owner pins in their manifest requirements.txt, installed separately.
+RUN pip install --no-cache-dir rich
 
 COPY dincli/docker/client-worker/client_worker.py /usr/local/bin/din-client-worker
 RUN chmod +x /usr/local/bin/din-client-worker
