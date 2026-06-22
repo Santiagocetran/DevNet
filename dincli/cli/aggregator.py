@@ -2,10 +2,21 @@ from pathlib import Path
 import time
 import typer
 from rich.table import Table
+from web3 import Web3
 from dincli.cli.dintoken import buy_dintokens, read_dintoken_stake, stake_dintokens
 from dincli.cli.utils import (CACHE_DIR, MIN_STAKE, build_and_send_tx,
                                get_manifest_key, require_custom_manifest_service)
+from dincli.cli.worker import (
+    ensure_worker_image,
+    ensure_worker_packages_installed,
+    get_worker_packages_dir,
+    get_worker_requirements_path,
+    read_worker_result,
+    run_worker_container,
+    write_worker_job,
+)
 from dincli.services.cid_utils import get_bytes32_from_cid, get_cid_from_bytes32
+from dincli.services.ipfs import upload_to_ipfs
 
 app = typer.Typer(help="Commands for Aggregators in DIN.")
 
@@ -242,9 +253,72 @@ def aggregate_t1(
         ctx.obj.ensure_file_exists(aggregator_service_path, manifest["ipfs"], "aggregator service")
         ctx.obj.ensure_file_exists(model_service_path, get_manifest_key(effective_network,"ModelArchitecture", model_id)["ipfs"], "model service")
 
-        fn = ctx.obj.load_custom_fn(aggregator_service_path, "get_aggregated_cid_t1")
-        
-        aggregated_cid = fn(curr_GI, account.address, model_cids, genesis_model_ipfs_hash, bid, model_base_dir)
+        aggregator_requirements_cid = get_manifest_key(effective_network, "requirements.txt", model_id).get("aggregators")
+        requirements_path = get_worker_requirements_path(model_base_dir, "aggregators")
+        packages_dir = None
+        if aggregator_requirements_cid:
+            ctx.obj.ensure_file_exists(requirements_path, aggregator_requirements_cid, "aggregator requirements")
+            try:
+                ensure_worker_image(console)
+                packages_dir = ensure_worker_packages_installed(
+                    requirements_path,
+                    get_worker_packages_dir(effective_network, model_id),
+                    console,
+                )
+            except RuntimeError as e:
+                console.print(f"[bold red]{e}[/bold red]")
+                raise typer.Exit(1)
+
+        # dincli fetches every IPFS-addressed input on the host into the same
+        # local paths get_aggregated_cid_t1 derives internally, so no network
+        # access happens inside the container.
+        aggregator_models_path = model_base_dir / "aggregator" / account.address / str(curr_GI) / "T1" / str(bid) / "models"
+        for model_cid in model_cids:
+            ctx.obj.ensure_file_exists(aggregator_models_path / f"{model_cid}.pth", model_cid, "T1 local model submission")
+        ctx.obj.ensure_file_exists(model_base_dir / "models" / "genesis_model.pth", genesis_model_ipfs_hash, "genesis model")
+
+        jobs_dir = model_base_dir / "jobs" / "aggregators" / account.address
+        job_path, output_dir = write_worker_job(
+            jobs_dir,
+            f"aggregator_t1_gi_{curr_GI}_batch_{bid}",
+            {
+                "network": effective_network,
+                "model_base_dir": "/din/model",
+                "manifest_path": "/din/model/manifest.json",
+                "role": "aggregator",
+                "service_path": manifest["path"],
+                "function_name": "get_aggregated_cid_t1",
+                "args": [curr_GI, account.address, model_cids, genesis_model_ipfs_hash, bid, "/din/model"],
+            },
+        )
+
+        docker_result = run_worker_container(
+            container_name=f"din-worker-aggregator-t1-model-{model_id}-gi-{curr_GI}-batch-{bid}",
+            model_base_dir=model_base_dir,
+            job_path=job_path,
+            output_dir=output_dir,
+            writable_subdirs=[aggregator_models_path],
+            packages_dir=packages_dir,
+        )
+
+        if docker_result.stdout:
+            console.print(docker_result.stdout)
+        if docker_result.returncode != 0:
+            if docker_result.stderr:
+                console.print(docker_result.stderr)
+            console.print(f"[bold red]Aggregator worker container failed for T1 batch {bid}.[/bold red]")
+            continue
+
+        worker_result = read_worker_result(output_dir)
+        if worker_result.get("status") != "ok":
+            console.print(f"[bold red]Aggregator worker failed:[/bold red] {worker_result.get('error')}")
+            traceback = worker_result.get("traceback")
+            if traceback:
+                console.print(traceback)
+            continue
+
+        averaged_model_path = model_base_dir / Path(worker_result["result"]).relative_to("/din/model")
+        aggregated_cid = upload_to_ipfs(averaged_model_path, f"Averaged T1 model for batch {bid}")
 
         console.print(f"Aggregated CID for T1 batch {bid} is {aggregated_cid}")
 
@@ -331,10 +405,72 @@ def aggregate_t2(
         require_custom_manifest_service(manifest, "get_aggregated_cid_t2")
         ctx.obj.ensure_file_exists(aggregator_service_path, manifest["ipfs"], "aggregator service")
         ctx.obj.ensure_file_exists(model_service_path, get_manifest_key(effective_network,"ModelArchitecture", model_id)["ipfs"], "model service")
-        
-        fn = ctx.obj.load_custom_fn(aggregator_service_path, "get_aggregated_cid_t2")
-        
-        aggregated_cid = fn(curr_GI, account.address, model_cids, genesis_model_ipfs_hash, bid, model_base_dir)
+
+        aggregator_requirements_cid = get_manifest_key(effective_network, "requirements.txt", model_id).get("aggregators")
+        requirements_path = get_worker_requirements_path(model_base_dir, "aggregators")
+        packages_dir = None
+        if aggregator_requirements_cid:
+            ctx.obj.ensure_file_exists(requirements_path, aggregator_requirements_cid, "aggregator requirements")
+            try:
+                ensure_worker_image(console)
+                packages_dir = ensure_worker_packages_installed(
+                    requirements_path,
+                    get_worker_packages_dir(effective_network, model_id),
+                    console,
+                )
+            except RuntimeError as e:
+                console.print(f"[bold red]{e}[/bold red]")
+                raise typer.Exit(1)
+
+        aggregator_models_path = model_base_dir / "aggregator" / account.address / str(curr_GI) / "T2" / str(bid) / "models"
+        for model_cid in model_cids:
+            ctx.obj.ensure_file_exists(aggregator_models_path / f"{model_cid}.pth", model_cid, "T1 final model")
+        ctx.obj.ensure_file_exists(model_base_dir / "models" / "genesis_model.pth", genesis_model_ipfs_hash, "genesis model")
+
+        jobs_dir = model_base_dir / "jobs" / "aggregators" / account.address
+        job_path, output_dir = write_worker_job(
+            jobs_dir,
+            f"aggregator_t2_gi_{curr_GI}_batch_{bid}",
+            {
+                "network": effective_network,
+                "model_base_dir": "/din/model",
+                "manifest_path": "/din/model/manifest.json",
+                "role": "aggregator",
+                "service_path": manifest["path"],
+                "function_name": "get_aggregated_cid_t2",
+                "args": [curr_GI, account.address, model_cids, genesis_model_ipfs_hash, bid, "/din/model"],
+            },
+        )
+
+        docker_result = run_worker_container(
+            container_name=f"din-worker-aggregator-t2-model-{model_id}-gi-{curr_GI}-batch-{bid}",
+            model_base_dir=model_base_dir,
+            job_path=job_path,
+            output_dir=output_dir,
+            writable_subdirs=[aggregator_models_path],
+            packages_dir=packages_dir,
+        )
+
+        if docker_result.stdout:
+            console.print(docker_result.stdout)
+        if docker_result.returncode != 0:
+            if docker_result.stderr:
+                console.print(docker_result.stderr)
+            console.print(f"[bold red]Aggregator worker container failed for T2 batch {bid}.[/bold red]")
+            continue
+
+        worker_result = read_worker_result(output_dir)
+        if worker_result.get("status") != "ok":
+            console.print(f"[bold red]Aggregator worker failed:[/bold red] {worker_result.get('error')}")
+            traceback = worker_result.get("traceback")
+            if traceback:
+                console.print(traceback)
+            continue
+
+        averaged_model_path = model_base_dir / Path(worker_result["result"]).relative_to("/din/model")
+        aggregated_cid = upload_to_ipfs(averaged_model_path, f"Averaged T2 model for batch {bid}")
+
+        console.print(f"Aggregated CID for T2 batch {bid} is {aggregated_cid}")
 
         if submit:
             try:

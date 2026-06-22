@@ -10,9 +10,6 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from dincli.services.ipfs import upload_to_ipfs
-
-
 DEFAULT_SCORING_POLICY: dict[str, Any] = {
     "spec_version": 1,
     "scenario": "labeled_holdout_classification",
@@ -375,11 +372,12 @@ def write_metric_bundle(
     test_data_cid: str | None,
     local_model_cid: str,
 ) -> AuditScoringResult:
-    """Persist and best-effort upload the detailed audit evidence bundle.
+    """Persist the detailed audit evidence bundle locally.
 
-    The current contract has no place to store `metricBundleCID`, so upload
-    failure must not block the legacy `(score, eligible)` return path. The file
-    still lands on disk and can be inspected by the auditor/operator.
+    The current contract has no place to store `metricBundleCID`. Uploading
+    the bundle to IPFS (if desired) is dincli's responsibility on the host
+    after this function returns, since no network access happens in here; the
+    file still lands on disk and can be inspected by the auditor/operator.
     """
 
     output_path = Path(output_dir)
@@ -410,16 +408,7 @@ def write_metric_bundle(
     with bundle_path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2, sort_keys=True)
 
-    metric_bundle_cid = None
-    try:
-        metric_bundle_cid = upload_to_ipfs(bundle_path, "Audit metric bundle")
-    except Exception:
-        # A V2 scoring path should surface this warning to the CLI. For the
-        # legacy path, keeping the audit result usable is more important than
-        # failing an otherwise valid score because the evidence upload backend
-        # is temporarily unavailable.
-        metric_bundle_cid = None
-
-    result.metric_bundle_cid = metric_bundle_cid
+    # Uploading is dincli's job on the host (best-effort), not this function's;
+    # leave metric_bundle_cid unset here.
     result.metric_bundle_path = str(bundle_path)
     return result

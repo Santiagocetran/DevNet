@@ -1,22 +1,25 @@
-import hashlib
-import json
-import subprocess
-from importlib.resources import files
 from pathlib import Path
 from typing import Optional
 
 import typer
 from web3 import Web3
 
-from dincli.cli.utils import CACHE_DIR, DOCKER_CACHE_DIR, build_and_send_tx, require_custom_manifest_service, _confirm_or_exit
+from dincli.cli.utils import CACHE_DIR, build_and_send_tx, require_custom_manifest_service, _confirm_or_exit
+from dincli.cli.worker import (
+    ensure_worker_image,
+    ensure_worker_packages_installed,
+    get_worker_packages_dir,
+    get_worker_requirements_path,
+    read_worker_result,
+    run_worker_container,
+    write_worker_job,
+)
 from dincli.services.cid_utils import get_bytes32_from_cid, get_cid_from_bytes32
 from dincli.services.ipfs import upload_to_ipfs
 
 app = typer.Typer(help="Commands for DIN clients in DIN.")
 lms_app = typer.Typer(help="LMS related commands")
 app.add_typer(lms_app, name="lms")
-
-CLIENT_WORKER_IMAGE = "din-client-worker:dev"
 
 DISABLED_DP_MODES = {"disabled", "none", "off", "false"}
 DP_MECHANISM_ALIASES = {
@@ -70,161 +73,6 @@ def get_local_model_path(model_base_dir: Path, account_address: str, gi: int, dp
     if dp_config["enabled"]:
         return client_model_dir / f"lm_{gi}_{dp_config['mechanism']}.pth"
     return client_model_dir / f"lm_{gi}.pth"
-
-
-def write_client_training_job(
-    model_base_dir: Path,
-    account_address: str,
-    effective_network: str,
-    genesis_model_ipfs_hash: str,
-    initial_model_ipfs_hash: Optional[str],
-    gi: int,
-) -> tuple[Path, Path]:
-    jobs_dir = model_base_dir / "jobs" / "clients" / account_address
-    output_dir = jobs_dir / f"client_lms_gi_{gi}_output"
-    jobs_dir.mkdir(parents=True, exist_ok=True)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    job_path = jobs_dir / f"client_lms_gi_{gi}.json"
-    job = {
-        "network": effective_network,
-        "account_address": account_address,
-        "genesis_model_ipfs_hash": genesis_model_ipfs_hash,
-        "initial_model_ipfs_hash": initial_model_ipfs_hash,
-        "gi": gi,
-        "model_base_dir": "/din/model",
-        "manifest_path": "/din/model/manifest.json",
-        "output_path": "/din/output/result.json",
-    }
-    job_path.write_text(json.dumps(job, indent=2) + "\n", encoding="utf-8")
-    return job_path, output_dir
-
-
-def ensure_client_worker_image(console) -> None:
-    inspect_result = subprocess.run(
-        ["docker", "image", "inspect", CLIENT_WORKER_IMAGE],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if inspect_result.returncode == 0:
-        return
-
-    dincli_package_root = Path(str(files("dincli")))
-    dockerfile_path = dincli_package_root / "docker" / "client-worker" / "Dockerfile"
-    build_context = dincli_package_root.parent
-    console.print(f"Docker image {CLIENT_WORKER_IMAGE} not found. Building it now...")
-    build_result = subprocess.run(
-        [
-            "docker",
-            "build",
-            "-f",
-            str(dockerfile_path),
-            "-t",
-            CLIENT_WORKER_IMAGE,
-            str(build_context),
-        ],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if build_result.stdout:
-        console.print(build_result.stdout)
-    if build_result.returncode != 0:
-        if build_result.stderr:
-            console.print(build_result.stderr)
-        raise RuntimeError(f"Failed to build Docker image {CLIENT_WORKER_IMAGE}")
-
-
-def get_client_requirements_path(model_base_dir: Path) -> Path:
-    return model_base_dir / "requirements" / "clients" / "requirements.txt"
-
-
-def get_client_packages_dir(network: str, model_id: int) -> Path:
-    return DOCKER_CACHE_DIR / network / f"model_{model_id}" / "client-packages"
-
-
-def ensure_client_packages_installed(requirements_path: Path, packages_dir: Path, console) -> Optional[Path]:
-    """Install whatever the model owner pinned in the manifest's clients requirements.txt.
-
-    Installed once per requirements.txt content (tracked by hash) into
-    DOCKER_CACHE_DIR, kept separate from the dincli cache so the install
-    container never touches manifest/service/wallet state.
-    """
-    if not requirements_path.exists():
-        return None
-
-    requirements_text = requirements_path.read_text(encoding="utf-8")
-    digest = hashlib.sha256(requirements_text.encode("utf-8")).hexdigest()
-    marker_path = packages_dir / ".requirements.sha256"
-    if marker_path.exists() and marker_path.read_text(encoding="utf-8").strip() == digest:
-        console.print(f"[green]✓ Client packages already installed at {packages_dir}[/green]")
-        return packages_dir
-
-    packages_dir.mkdir(parents=True, exist_ok=True)
-    console.print(f"Installing client requirements from {requirements_path} into {packages_dir} ...")
-    install_result = subprocess.run(
-        [
-            "docker", "run", "--rm",
-            "--entrypoint", "pip",
-            "-v", f"{requirements_path.resolve()}:/din/requirements.txt:ro",
-            "-v", f"{packages_dir.resolve()}:/din/packages:rw",
-            CLIENT_WORKER_IMAGE,
-            "install", "--no-cache-dir", "--target", "/din/packages", "-r", "/din/requirements.txt",
-        ],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if install_result.stdout:
-        console.print(install_result.stdout)
-    if install_result.returncode != 0:
-        if install_result.stderr:
-            console.print(install_result.stderr)
-        raise RuntimeError("Failed to install client requirements into the worker packages cache.")
-
-    marker_path.write_text(digest, encoding="utf-8")
-    console.print(f"[bold green]Client packages ready at {packages_dir}[/bold green]")
-    return packages_dir
-
-
-def run_client_worker_container(model_base_dir: Path, job_path: Path, output_dir: Path, model_id: int, gi: int, packages_dir: Optional[Path] = None):
-    container_name = f"din-client-worker-model-{model_id}-gi-{gi}"
-    cmd = [
-        "docker",
-        "run",
-        "--rm",
-        "--name",
-        container_name,
-        "--cpus",
-        "2",
-        "--memory",
-        "4g",
-        "--network",
-        "none",
-        "-v",
-        f"{model_base_dir.resolve()}:/din/model:rw",
-        "-v",
-        f"{job_path.resolve()}:/din/job/job.json:ro",
-        "-v",
-        f"{output_dir.resolve()}:/din/output:rw",
-    ]
-    if packages_dir is not None:
-        cmd += [
-            "-v",
-            f"{packages_dir.resolve()}:/din/packages:ro",
-            "-e",
-            "PYTHONPATH=/din/packages",
-        ]
-    cmd.append(CLIENT_WORKER_IMAGE)
-    return subprocess.run(cmd, text=True, capture_output=True, check=False)
-
-
-def read_client_worker_result(output_dir: Path) -> dict:
-    result_path = output_dir / "result.json"
-    if not result_path.exists():
-        raise FileNotFoundError(f"Client worker did not write result file at {result_path}")
-    return json.loads(result_path.read_text(encoding="utf-8"))
 
 
 @app.command("create-client-dataset-dir")
@@ -284,15 +132,15 @@ def train_lms(
     ctx.obj.ensure_file_exists(model_service_path, model_manifest["ipfs"], "model architecture service")
 
     client_requirements_cid = runtime.get_manifest_key("requirements.txt", {}).get("clients")
-    requirements_path = get_client_requirements_path(model_base_dir)
+    requirements_path = get_worker_requirements_path(model_base_dir, "clients")
     packages_dir = None
     if client_requirements_cid:
         ctx.obj.ensure_file_exists(requirements_path, client_requirements_cid, "client requirements")
         try:
-            ensure_client_worker_image(console)
-            packages_dir = ensure_client_packages_installed(
+            ensure_worker_image(console)
+            packages_dir = ensure_worker_packages_installed(
                 requirements_path,
-                get_client_packages_dir(effective_network, model_id),
+                get_worker_packages_dir(effective_network, model_id),
                 console,
             )
         except RuntimeError as e:
@@ -330,24 +178,35 @@ def train_lms(
 
     _confirm_or_exit(f"Creating a job to train a local model using containerized service. Are you sure that {client_dataset_path} is updated with your latest dataset? This may take a while. Do you want to continue?", "Aborted by user.", console=console)
 
-    job_path, output_dir = write_client_training_job(
-        model_base_dir=model_base_dir,
-        account_address=account.address,
-        effective_network=effective_network,
-        genesis_model_ipfs_hash=genesis_model_ipfs_hash,
-        initial_model_ipfs_hash=initial_model_ipfs_hash,
-        gi=current_GI,
+    jobs_dir = model_base_dir / "jobs" / "clients" / account.address
+    job_path, output_dir = write_worker_job(
+        jobs_dir,
+        f"client_lms_gi_{current_GI}",
+        {
+            "network": effective_network,
+            "model_base_dir": "/din/model",
+            "manifest_path": "/din/model/manifest.json",
+            "role": "client",
+            "service_path": manifest["path"],
+            "function_name": "train_client_model",
+            "args": [genesis_model_ipfs_hash, account.address, effective_network],
+            "kwargs": {
+                "initial_model_ipfs_hash": initial_model_ipfs_hash,
+                "model_base_dir": "/din/model",
+                "gi": current_GI,
+            },
+        },
     )
     console.print(f"Created client training job at {job_path}")
 
     _confirm_or_exit("Starting training a local model using containerized service. This may take a while. Do you want to continue?", "Aborted by user.", console=console)
 
-    docker_result = run_client_worker_container(
+    docker_result = run_worker_container(
+        container_name=f"din-worker-client-model-{model_id}-gi-{current_GI}",
         model_base_dir=model_base_dir,
         job_path=job_path,
         output_dir=output_dir,
-        model_id=model_id,
-        gi=current_GI,
+        writable_subdirs=[model_base_dir / "models" / "clients" / account.address],
         packages_dir=packages_dir,
     )
 
@@ -359,7 +218,7 @@ def train_lms(
         console.print("[bold red]Client worker container failed.[/bold red]")
         raise typer.Exit(docker_result.returncode)
 
-    worker_result = read_client_worker_result(output_dir)
+    worker_result = read_worker_result(output_dir)
     if worker_result.get("status") != "ok":
         console.print(f"[bold red]Client worker failed:[/bold red] {worker_result.get('error')}")
         traceback = worker_result.get("traceback")
@@ -367,7 +226,7 @@ def train_lms(
             console.print(traceback)
         raise typer.Exit(1)
 
-    container_model_path = Path(worker_result["local_model_path"])
+    container_model_path = Path(worker_result["result"])
     local_model_path = model_base_dir / container_model_path.relative_to("/din/model")
     console.print(f"[bold green]Local model generated at {local_model_path}[/bold green]")
 

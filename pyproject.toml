@@ -33,4 +33,4 @@ where = ["."]  # look in project root
 include = ["dincli*"]  # only include dincli and subpackages
 
 [tool.setuptools.package-data]
-dincli = ["config/*.json", "abis/*", "docker/*"]
+dincli = ["config/*.json", "abis/*", "docker/**/*"]

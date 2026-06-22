@@ -149,9 +149,9 @@
    },
    "requirements.txt": {
       "clients": "bafybeifnikybtb2dsxc3b2ehocjrji27ypj2uwc6363nc7hci4rmoqbbn4",
-      "auditors": "bafybeifolbr4ti734zwbgtu6alimwfl22y4sxsopprd2727rukvac6halm",
-      "aggregators": "bafybeifolbr4ti734zwbgtu6alimwfl22y4sxsopprd2727rukvac6halm",
-      "modelowner": "bafybeifolbr4ti734zwbgtu6alimwfl22y4sxsopprd2727rukvac6halm"
+      "auditors": "bafybeifnikybtb2dsxc3b2ehocjrji27ypj2uwc6363nc7hci4rmoqbbn4",
+      "aggregators": "bafybeifnikybtb2dsxc3b2ehocjrji27ypj2uwc6363nc7hci4rmoqbbn4",
+      "modelowner": "bafybeifnikybtb2dsxc3b2ehocjrji27ypj2uwc6363nc7hci4rmoqbbn4"
    },
    "task_contracts": {
       "DINTaskCoordinator_Contract": {

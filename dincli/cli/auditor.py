@@ -6,6 +6,15 @@ from rich.table import Table
 from dincli.cli.dintoken import buy_dintokens, read_dintoken_stake, stake_dintokens
 from dincli.cli.utils import (CACHE_DIR, MIN_STAKE, build_and_send_tx,
                                get_manifest_key, require_custom_manifest_service)
+from dincli.cli.worker import (
+    ensure_worker_image,
+    ensure_worker_packages_installed,
+    get_worker_packages_dir,
+    get_worker_requirements_path,
+    read_worker_result,
+    run_worker_container,
+    write_worker_job,
+)
 from dincli.services.cid_utils import get_cid_from_bytes32
 
 app = typer.Typer(help="Commands for Auditors in DIN.")
@@ -272,10 +281,34 @@ def evaluate_lms(
     ctx.obj.validate_GIstate_ET_given_GIstate(curr_GIstate, "LMSevaluationStarted", "Can not evaluate auditor batches at this time")
     
     audtor_batch_count = task_auditor_contract.functions.AuditorsBatchCount(curr_GI).call()
-    
+
     genesis_model_cid_raw = task_coordinator_contract.functions.genesisModelIpfsHash().call()
     genesis_model_cid = get_cid_from_bytes32(genesis_model_cid_raw.hex())
-    
+
+    model_base_dir = ctx.obj.get_model_base_dir(model_id)
+
+    auditor_requirements_cid = get_manifest_key(effective_network, "requirements.txt", model_id).get("auditors")
+    requirements_path = get_worker_requirements_path(model_base_dir, "auditors")
+    packages_dir = None
+    if auditor_requirements_cid:
+        ctx.obj.ensure_file_exists(requirements_path, auditor_requirements_cid, "auditor requirements")
+        try:
+            ensure_worker_image(console)
+            packages_dir = ensure_worker_packages_installed(
+                requirements_path,
+                get_worker_packages_dir(effective_network, model_id),
+                console,
+            )
+        except RuntimeError as e:
+            console.print(f"[bold red]{e}[/bold red]")
+            raise typer.Exit(1)
+
+    ctx.obj.ensure_file_exists(
+        model_base_dir / "models" / "genesis_model.pth",
+        genesis_model_cid,
+        "genesis model",
+    )
+
     found_any = False
 
     for batch_id in range(audtor_batch_count):
@@ -310,20 +343,70 @@ def evaluate_lms(
             lms = task_auditor_contract.functions.lmSubmissions(curr_GI, model_index).call()
             lm_cid = get_cid_from_bytes32(lms[1].hex())
 
-            model_base_dir = ctx.obj.get_model_base_dir(model_id)
             manifest = get_manifest_key(effective_network, "Score_model_by_auditor", model_id)
             auditor_service_path = model_base_dir / Path(manifest["path"])
             model_service_path = model_base_dir / Path(get_manifest_key(effective_network, "ModelArchitecture", model_id)["path"])
 
             require_custom_manifest_service(manifest, "Score_model_by_auditor")
-            ctx.obj.ensure_file_exists(auditor_service_path, manifest["ipfs"],"auditor service")
-            ctx.obj.ensure_file_exists(model_service_path, get_manifest_key(effective_network, "ModelArchitecture", model_id)["ipfs"],"model service")
-       
-            fn = ctx.obj.load_custom_fn(
-            auditor_service_path,
-            "Score_model_by_auditor")
-            
-            score, eligible = fn(curr_GI, genesis_model_cid, batch_id, model_index, account.address, testDataCID, lm_cid, model_base_dir)
+            ctx.obj.ensure_file_exists(auditor_service_path, manifest["ipfs"], "auditor service")
+            ctx.obj.ensure_file_exists(model_service_path, get_manifest_key(effective_network, "ModelArchitecture", model_id)["ipfs"], "model service")
+
+            # dincli fetches every IPFS-addressed input on the host; the
+            # container only ever sees already-materialized local files at the
+            # exact paths Score_model_by_auditor derives internally.
+            ctx.obj.ensure_file_exists(
+                model_base_dir / "dataset" / "auditor" / "TestDatasets" / f"auditorDataset_{curr_GI}_{batch_id}.pt",
+                testDataCID,
+                "auditor test data",
+            )
+            ctx.obj.ensure_file_exists(
+                model_base_dir / "models" / "auditor" / f"lm_{curr_GI}_{model_index}.pth",
+                lm_cid,
+                "local model submission",
+            )
+
+            metric_bundle_dir = model_base_dir / "audits" / "metric_bundles" / account.address
+            jobs_dir = model_base_dir / "jobs" / "auditors" / account.address
+            job_path, output_dir = write_worker_job(
+                jobs_dir,
+                f"auditor_score_gi_{curr_GI}_batch_{batch_id}_lm_{model_index}",
+                {
+                    "network": effective_network,
+                    "model_base_dir": "/din/model",
+                    "manifest_path": "/din/model/manifest.json",
+                    "role": "auditor",
+                    "service_path": manifest["path"],
+                    "function_name": "Score_model_by_auditor",
+                    "args": [curr_GI, genesis_model_cid, batch_id, model_index, account.address, testDataCID, lm_cid, "/din/model"],
+                },
+            )
+
+            docker_result = run_worker_container(
+                container_name=f"din-worker-auditor-model-{model_id}-gi-{curr_GI}-batch-{batch_id}-lm-{model_index}",
+                model_base_dir=model_base_dir,
+                job_path=job_path,
+                output_dir=output_dir,
+                writable_subdirs=[metric_bundle_dir],
+                packages_dir=packages_dir,
+            )
+
+            if docker_result.stdout:
+                console.print(docker_result.stdout)
+            if docker_result.returncode != 0:
+                if docker_result.stderr:
+                    console.print(docker_result.stderr)
+                console.print(f"[bold red]Auditor worker container failed for LM {model_index} from batch {batch_id}.[/bold red]")
+                continue
+
+            worker_result = read_worker_result(output_dir)
+            if worker_result.get("status") != "ok":
+                console.print(f"[bold red]Auditor worker failed:[/bold red] {worker_result.get('error')}")
+                traceback = worker_result.get("traceback")
+                if traceback:
+                    console.print(traceback)
+                continue
+
+            score, eligible = worker_result["result"]
 
             console.print(f"Score: {score}")
             console.print(f"Eligible: {eligible}")

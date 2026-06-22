@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import inspect
 import json
 import sys
 import traceback
@@ -53,6 +54,14 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
         f.write("\n")
 
 
+def _accepts_runtime(fn) -> bool:
+    signature = inspect.signature(fn)
+    return "runtime" in signature.parameters or any(
+        parameter.kind == inspect.Parameter.VAR_KEYWORD
+        for parameter in signature.parameters.values()
+    )
+
+
 def run(job_path: Path) -> int:
     job = read_json(job_path)
     output_path = Path(job.get("output_path", "/din/output/result.json"))
@@ -62,41 +71,34 @@ def run(job_path: Path) -> int:
         manifest_path = Path(job.get("manifest_path", model_base_dir / "manifest.json"))
         manifest = read_json(manifest_path)
 
-        service_entry = manifest["train_client_model"]
-        service_path = model_base_dir / service_entry["path"]
-        train_fn = load_function(service_path, "train_client_model")
+        service_path = model_base_dir / job["service_path"]
+        fn = load_function(service_path, job["function_name"])
 
-        runtime = WorkerRuntime(
-            network=job["network"],
-            manifest=manifest,
-            manifest_path=manifest_path,
-        )
+        args = list(job.get("args", []))
+        kwargs = dict(job.get("kwargs", {}))
 
-        local_model_path = train_fn(
-            job["genesis_model_ipfs_hash"],
-            job["account_address"],
-            job["network"],
-            initial_model_ipfs_hash=job.get("initial_model_ipfs_hash"),
-            model_base_dir=model_base_dir,
-            gi=job.get("gi"),
-            runtime=runtime,
-        )
+        if _accepts_runtime(fn):
+            kwargs.setdefault(
+                "runtime",
+                WorkerRuntime(
+                    network=job["network"],
+                    manifest=manifest,
+                    manifest_path=manifest_path,
+                    role=job.get("role", "client"),
+                ),
+            )
 
-        write_json(
-            output_path,
-            {
-                "status": "ok",
-                "local_model_path": local_model_path,
-            },
-        )
+        result = fn(*args, **kwargs)
+
+        write_json(output_path, {"status": "ok", "result": result})
         return 0
 
-    except Exception as exc:
+    except Exception:
         write_json(
             output_path,
             {
                 "status": "error",
-                "error": str(exc),
+                "error": str(sys.exc_info()[1]),
                 "traceback": traceback.format_exc(),
             },
         )
@@ -104,7 +106,7 @@ def run(job_path: Path) -> int:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run a DIN client training job.")
+    parser = argparse.ArgumentParser(description="Run a DIN worker job (client/auditor/aggregator).")
     parser.add_argument("--job", default="/din/job/job.json", help="Path to the mounted worker job JSON.")
     args = parser.parse_args()
     raise SystemExit(run(Path(args.job)))

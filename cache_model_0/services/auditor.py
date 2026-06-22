@@ -5,8 +5,14 @@ from pathlib import Path
 import torch
 from rich import console
 
-from dincli.services.ipfs import retrieve_from_ipfs
-from dincli.services.scoring import (
+# Dynamic service loading means this file may be imported from a task cache
+# directory rather than as part of a normal Python package. Adding the service
+# directory to `sys.path` keeps sibling-module imports (`model`, `scoring`)
+# working for the reference task while still allowing model owners to ship
+# custom services.
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from model import ModelArchitecture  # noqa: E402,F401
+from scoring import (  # noqa: E402
     evaluate_classification_model,
     load_scoring_policy,
     normalize_holdout_delta_score,
@@ -15,60 +21,7 @@ from dincli.services.scoring import (
 )
 
 
-# Dynamic service loading means this file may be imported from a task cache
-# directory rather than as part of a normal Python package. Adding the service
-# directory to `sys.path` keeps the local `model.py` import working for the
-# reference task while still allowing model owners to ship custom services.
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from model import ModelArchitecture  # noqa: E402,F401
-
-
 console = console.Console()
-
-
-def _download_inputs(gi, genesis_model_cid, batch_id, model_index, testDataCID, lm_cid, model_base_dir):
-    """Download the three artifacts the legacy auditor path knows about.
-
-    Today's `DINTaskAuditor.sol` stores a batch `testDataCID` and each local
-    model submission CID. It does not yet store an `evaluationSpecCID`, so the
-    first scoring implementation keeps the existing download shape and layers a
-    richer policy-driven scorer on top of it.
-    """
-
-    base_dir = Path(model_base_dir)
-    dataset_dir = base_dir / "dataset" / "auditor" / "TestDatasets"
-    model_dir = base_dir / "models" / "auditor"
-    dataset_dir.mkdir(parents=True, exist_ok=True)
-    model_dir.mkdir(parents=True, exist_ok=True)
-
-    test_data_path = dataset_dir / f"auditorDataset_{gi}_{batch_id}.pt"
-    genesis_model_path = base_dir / "models" / "genesis_model.pth"
-    local_model_path = model_dir / f"lm_{gi}_{model_index}.pth"
-
-    retrieve_from_ipfs(testDataCID, test_data_path)
-    console.print(
-        "Auditor test data for batch",
-        batch_id,
-        "retrieved with IPFS hash",
-        testDataCID,
-        "at path",
-        test_data_path,
-    )
-
-    retrieve_from_ipfs(genesis_model_cid, genesis_model_path)
-    console.print(
-        "Auditor genesis model retrieved with IPFS hash",
-        genesis_model_cid,
-        "at path",
-        genesis_model_path,
-    )
-
-    retrieve_from_ipfs(lm_cid, local_model_path)
-    console.print(
-        f"Local model {model_index} for batch {batch_id} retrieved with IPFS hash {lm_cid} at path {local_model_path}"
-    )
-
-    return test_data_path, genesis_model_path, local_model_path
 
 
 def _load_artifacts(test_data_path, genesis_model_path, local_model_path):
@@ -114,20 +67,20 @@ def Score_model_by_auditor(gi, genesis_model_cid, batch_id, model_index, auditor
     richer fields are intentionally preserved in the metric bundle so that the
     service can migrate to `setAuditResultV2(...)` without changing the scoring
     math again.
+
+    `genesis_model_cid`/`testDataCID`/`lm_cid` are kept as parameters purely for
+    provenance (recorded into the metric bundle); dincli fetches the actual
+    artifacts via IPFS before invoking this function and places them at the
+    deterministic local paths derived below, so no network access happens here.
     """
 
     try:
         policy = load_scoring_policy(model_base_dir)
 
-        test_data_path, genesis_model_path, local_model_path = _download_inputs(
-            gi,
-            genesis_model_cid,
-            batch_id,
-            model_index,
-            testDataCID,
-            lm_cid,
-            model_base_dir,
-        )
+        base_dir = Path(model_base_dir)
+        test_data_path = base_dir / "dataset" / "auditor" / "TestDatasets" / f"auditorDataset_{gi}_{batch_id}.pt"
+        genesis_model_path = base_dir / "models" / "genesis_model.pth"
+        local_model_path = base_dir / "models" / "auditor" / f"lm_{gi}_{model_index}.pth"
 
         testdata, baseline_model, candidate_model, candidate_state = _load_artifacts(
             test_data_path,
