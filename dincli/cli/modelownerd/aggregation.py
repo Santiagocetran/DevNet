@@ -1,5 +1,4 @@
 from pathlib import Path
-import time
 import typer
 from rich.table import Table
 
@@ -250,14 +249,21 @@ def close_t2_aggregation(
     model_id: int = typer.Argument(..., help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
 ):
+    """Finalize Tier 2 aggregation on-chain.
+
+    This is the only on-chain side effect in this step. Off-chain scoring and
+    the `setTier2Score` transaction are a separate command (`t2 set-score`) so
+    that a failure in scoring never leaves this already-finalized transaction
+    stuck behind a one-shot command that can't be safely re-run.
+    """
     effective_network, w3, account, console = ctx.obj.get_en_w3_account_console(model_id)
 
     task_coordinator_Contract = ctx.obj.get_deployed_din_task_coordinator_contract(True, model_id)
-    
+
     curr_GI, GIstate = ctx.obj.get_current_gi_and_state(task_coordinator_Contract)
 
     ref_gi = ctx.obj.validate_gi_ET_curr_GI(gi, curr_GI)
-    ctx.obj.validate_GIstate_ET_given_GIstate(GIstate, "T2AggregationStarted","Can not close Tier 2 aggregation at this time.")
+    ctx.obj.validate_GIstate_ET_given_GIstate(GIstate, "T2AggregationStarted", "Can not close Tier 2 aggregation at this time.")
 
     console.print(f"[bold green]Finalizing Tier 2 Aggregation[/bold green]")
     try:
@@ -270,19 +276,48 @@ def close_t2_aggregation(
             exit_on_failure=False
         )
         console.print(f"[dim]Tx hash: {tx_receipt.transactionHash.hex()}[/dim]")
+    except Exception as e:
+        console.print(f"[red]Error: Tier 2 Aggregation finalized transaction failed[/red] {e}")
+        raise typer.Exit(1)
 
-        # 2. Get Tier 2 batch to find final CID
-        time.sleep(10)
+    console.print(
+        f"[bold yellow]⚠ You must now run `aggregator t2 set-score --gi {ref_gi}` "
+        f"to score the final GM model and submit the Tier 2 score before slashing auditors.[/bold yellow]"
+    )
+
+
+@t2_app.command("set-score")
+def set_t2_score(
+    ctx: typer.Context,
+    model_id: int = typer.Argument(..., help="Model ID"),
+    gi: int = typer.Option(None, "--gi", help="Global iteration number"),
+):
+    """Score the final GM model and submit the Tier 2 score on-chain.
+
+    Safe to re-run: `setTier2Score` only requires GIstate == T2AggregationDone
+    (it doesn't itself advance state), so a failure here (e.g. a scoring bug)
+    never requires re-running `t2 close`'s finalize transaction.
+    """
+    effective_network, w3, account, console = ctx.obj.get_en_w3_account_console(model_id)
+
+    task_coordinator_Contract = ctx.obj.get_deployed_din_task_coordinator_contract(True, model_id)
+
+    curr_GI, GIstate = ctx.obj.get_current_gi_and_state(task_coordinator_Contract)
+
+    ref_gi = ctx.obj.validate_gi_ET_curr_GI(gi, curr_GI)
+    ctx.obj.validate_GIstate_ET_given_GIstate(GIstate, "T2AggregationDone", "Can not set Tier 2 score at this time. Run `aggregator t2 close` first.")
+
+    try:
+        # 1. Get Tier 2 batch to find final CID
         tier2_batch = task_coordinator_Contract.functions.getTier2Batch(ref_gi, 0).call()
         # (bid, validators, finalized, cid)
         finalCID_raw = tier2_batch[3]
         finalCID = get_cid_from_bytes32(finalCID_raw.hex()) if finalCID_raw and finalCID_raw != bytes(32) else None
-        
+
         console.print(f"[cyan]Final CID:[/cyan] {finalCID}")
 
-        # 3. Calculate score
+        # 2. Calculate score
         console.print("[cyan]Calculating score for final GM model...[/cyan]")
-
 
         manifest = get_manifest_key(effective_network, "getscoreforGM", model_id)
         model_base_path = Path(CACHE_DIR) / effective_network /  f"model_{model_id}"
@@ -301,22 +336,21 @@ def close_t2_aggregation(
         if not (Path(model_base_path)/"dataset"/"test"/"test_dataset.pt").exists():
             console.print("[red]Error:[/red] Test dataset not found at ", str(Path(model_base_path)/"dataset"/"test"/"test_dataset.pt"))
             console.print("[yellow]Warning:[/yellow] please ensure the test dataset is present at ", str(Path(model_base_path)/"dataset"/"test"/"test_dataset.pt"))
-            raise typer.Exit(1) 
+            raise typer.Exit(1)
         accuracy = fn(curr_GI, finalCID, model_base_path)
         console.print(f"[green]Accuracy:[/green] {accuracy}")
 
-        # 4. Set Tier 2 score
+        # 3. Set Tier 2 score
         score_receipt = build_and_send_tx(
             ctx,
             task_coordinator_Contract.functions.setTier2Score(curr_GI, int(accuracy)),
             "Setting Tier 2 score",
-            "Tier 2 Aggregation finalized and score set",
+            "Tier 2 score set",
             "Tier 2 score set transaction failed",
             exit_on_failure=False
         )
         console.print(f"[dim]Score Tx hash: {score_receipt.transactionHash.hex()}[/dim]")
 
     except Exception as e:
-        console.print(f"[red]Error: Tier 2 Aggregation finalized and score set transactions failed[/red] {e}")
+        console.print(f"[red]Error: Tier 2 score set transaction failed[/red] {e}")
         raise typer.Exit(1)
-    
