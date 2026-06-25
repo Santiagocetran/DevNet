@@ -152,6 +152,8 @@ Suggested worker mounts:
 | `~/.cache/dincli/<network>/model_<model_id>/worker/gi-<n>/output` | `/din/output` | read-write | Worker result JSON and any future local output bundle |
 | `~/.cache/dincli/<network>/model_<model_id>/worker/gi-<n>/logs` | `/din/logs` | read-write | Worker logs and diagnostics |
 
+> **Note:** In implementation, actual mounts differ from the design table above — see `run_worker_container` in `dincli/cli/worker.py:138-159`. Current mounts: `/din/model` (ro), `/din/model/<subdir>` (rw overlay), `/din/job/job.json` (ro), `/din/output` (rw), `/din/packages` (ro).
+
 Do not mount:
 
 - `~/.config/dincli` directly into the untrusted worker
@@ -337,6 +339,8 @@ These costs should be documented clearly so node operators can choose appropriat
 - Document local Docker requirements and minimum resource ceilings.
 - Add Docker Compose examples for start, stop, upgrade, and log collection.
 
+> **Status (2026-06):** Implemented — see `dincli/cli/worker.py` and `dincli/docker/worker/`. This phase is done.
+
 ### Phase 2: Role Coverage
 
 - Extend the worker flow to aggregator services.
@@ -344,6 +348,8 @@ These costs should be documented clearly so node operators can choose appropriat
 - Add role-specific runtime profiles.
 - Add structured job input and output schemas.
 - Add logs and error reporting that are usable from CLI and daemon flows.
+
+> **Status (2026-06):** Already covered — `client.py`, `auditor.py`, and `aggregator.py` (t1/t2) all invoke `run_worker_container`.
 
 ### Phase 3: Manifest Policy
 

@@ -140,6 +140,53 @@ docker compose exec din-node dincli client train-lms ...
 
 ---
 
+## Migrating from a host install
+
+If you previously ran `dincli` directly on the host (`pip install -e .`), your
+state lives at the platformdirs defaults. `din-node` reads the **same**
+`platformdirs` names but redirected under `$DIN_STATE_DIR`, so you must copy the
+three directories across **before** first start. Do this while `din-node` is
+stopped.
+
+```bash
+source .env                       # so $DIN_STATE_DIR is set
+
+# Create the destination dirs first so the copy is idempotent (re-runnable
+# without producing nested config/dincli/dincli paths).
+mkdir -p "$DIN_STATE_DIR/config/dincli" \
+         "$DIN_STATE_DIR/cache/dincli" \
+         "$DIN_STATE_DIR/cache/dincli-docker"
+
+# Copy *contents* into the existing dirs (trailing /. ), preserving perms/links.
+# 1. Wallet + config  (MUST succeed — this is your keys)
+cp -a ~/.config/dincli/.        "$DIN_STATE_DIR/config/dincli/"
+# 2. Manifests / models / job files
+cp -a ~/.cache/dincli/.         "$DIN_STATE_DIR/cache/dincli/"
+# 3. Worker package cache (optional — re-downloaded if skipped)
+cp -a ~/.cache/dincli-docker/.  "$DIN_STATE_DIR/cache/dincli-docker/"
+
+# Re-own everything as the container user
+sudo chown -R "$DIN_UID:$DIN_GID" "$DIN_STATE_DIR"
+```
+
+Verify before trusting it:
+
+```bash
+docker compose up -d
+docker compose exec din-node dincli system read-wallet   # should print your wallet address
+```
+
+> If your wallet is **encrypted** (the normal case, not demo mode),
+> `read-wallet` decrypts the keystore and will **prompt for your wallet
+> password** before showing the address — that prompt means migration worked.
+> (Demo-mode plaintext wallets print the address with no prompt.)
+
+> Use `cp -a … /.` (copy contents), not `mv`, until you've confirmed the wallet
+> shows up — keep the host copy as a backup. Only the `config/dincli` move is
+> critical; the two cache dirs are regenerated on demand if missing.
+
+---
+
 ## Day-to-day lifecycle
 
 Run from `dincli/docker/node/`.
@@ -152,6 +199,17 @@ Run from `dincli/docker/node/`.
 | **Logs** | `docker compose logs -f din-node` |
 | **Run any dincli command** | `docker compose exec din-node dincli <args>` |
 | **Open a shell** | `docker compose exec din-node bash` |
+| **List DIN containers** | `docker ps -a --filter "name=din-"` |
+
+This shows `din-node` plus any worker containers currently running. Workers are
+named `din-worker-<role>-model-<id>-gi-<n>...` and normally self-remove (`--rm`)
+the moment their job finishes, so in steady state you'll usually see only
+`din-node`. Seeing a `din-worker-*` container means a job is in flight.
+
+> The worker **dependency-install** step runs in a separate, *unnamed* container
+> (also `--rm`). It won't match the `name=din-` filter; if you want to catch it,
+> use `docker ps -a --filter "ancestor=din-worker:dev"` while an install is
+> running.
 
 > `din-node` currently idles (`sleep infinity`) and you `exec` into it, because
 > `dincli` is a CLI, not yet a daemon. When the `dind` daemon lands it becomes the
@@ -218,6 +276,32 @@ You can also remove the images if you no longer need them:
 ```bash
 docker image rm din-node:dev din-worker:dev
 ```
+
+### Cleaning up a stuck or orphaned worker
+
+Workers self-remove on exit via `--rm`. That cleanup does **not** fire if the
+job is killed abnormally — e.g. the Docker daemon restarts mid-job, or the host
+is hard-rebooted. You may then find a leftover `din-worker-*` container.
+
+```bash
+# 1. See what's there
+docker ps -a --filter "name=din-worker-"
+
+# 2. Stop it if still running, then remove it
+docker stop <container-name>      # only if STATUS shows it Up
+docker rm   <container-name>
+
+# Or clear all *exited* DIN workers at once (does not touch running ones):
+docker ps -aq --filter "name=din-worker-" --filter "status=exited" | xargs -r docker rm
+```
+
+Removing an **exited or orphaned** worker is safe: workers are stateless and
+write all output to the bind-mounted state dir, not into the container, so a new
+job just spawns a fresh worker. **But do not blindly `docker stop` a *running*
+worker** — that kills the active job and can leave partial/half-written output in
+the state dir. Only stop a running worker once you've confirmed no job should
+still be in flight (check `docker ps --filter "name=din-worker-"` and your own
+job status first).
 
 ---
 
