@@ -210,9 +210,10 @@ The goal is to avoid asking early validators to join an empty or opaque network.
 
 - Add Docker Compose for local validator operation. — **Status (2026-06):** Addressed for devnet by `din-node` — see `dincli/docker/node/` (PR #12).
 - Document start, stop, upgrade, logs, and volume cleanup. — **Status (2026-06):** Covered by `dincli/docker/node/README.md`.
-- Replace plaintext private-key guidance with passphrase-protected keystore guidance.
-- Publish initial resource guidance for aggregator and auditor roles.
-- Add a basic slashing and failure-mode document.
+- Replace plaintext private-key guidance with passphrase-protected keystore guidance. — **Scheduled:** P3 WP 0.2 (July 6–10, 2026).
+- Implement graceful SIGTERM handling for validator services. — **Scheduled:** P3 WP 0.2 (July 6–10, 2026).
+- Publish initial resource guidance for aggregator and auditor roles. — **Scheduled:** P3 WP 0.2 (July 6–10, 2026).
+- Add a basic slashing and failure-mode document. — **Scheduled:** P3 WP 4.3 (July 6–10, 2026).
 
 ### Phase 2: Daemon Operations
 

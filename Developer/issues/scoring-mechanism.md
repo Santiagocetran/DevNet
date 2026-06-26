@@ -224,13 +224,15 @@ The rejection is not because the paper is weak. It is because DIN's validator ha
 
 ### 6. Required scoring algorithms for implementation
 
+The scoring module follows the BlockFLow design (MIT, 2020). BlockFLow operates at the model/update level rather than per sample, applies DP directly to shared weights, uses a median aggregator across evaluators tolerating up to ~50% malicious parties, and distributes rewards proportionally from a pooled bond. This aligns with our architecture point for point. The one BlockFLow mechanism we do not carry over is their evaluation-honesty second score — it exists because their agents score each other; our clients do not evaluate each other, and validator honesty is covered by staking and the cross-validator median.
+
 The scoring module should implement at least three validator-side algorithms:
 
-1. `eligibility_anomaly_gate`: conformance, finite tensors, norm cap, and optional cosine-to-consensus screening.
-2. `holdout_delta_score`: validation-set utility delta against the current global model.
-3. `mc_marginal_gain_score`: sequential marginal contribution over accepted updates, averaged over random permutations when reward fairness matters.
+1. `eligibility_anomaly_gate`: conformance, finite tensors, norm cap, and cosine-to-consensus-direction screening. The norm cap also serves as the DP clipping bound, making it synergistic with differential privacy applied to weight updates.
+2. `holdout_delta_score`: validation-set utility delta against the current global model — `metric(global + update_i, D_val) - metric(global, D_val)`. Gain above ε accepts the update.
+3. `mc_marginal_gain_score`: sequential marginal contribution with fold-in (`M = M ⊕ u` for accepted updates), averaged over n_perms random orderings. n_perms=1 is the cheap detection baseline; increase only when reward attribution fairness matters. A duplicate update scores near zero once its first copy is folded in, providing duplicate-data discounting without extra machinery.
 
-Cross-validator aggregation should then use majority vote for acceptance and median score for the final normalized score.
+Cross-validator aggregation should use majority vote for acceptance and median score for the final normalized score across validators. Median tolerance: up to ~half of validators can be malicious.
 
 ## Recommended DevNet Default
 

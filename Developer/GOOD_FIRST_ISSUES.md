@@ -40,6 +40,14 @@ Core components:
 
 ## Open Issues
 
+### 0. Starter Task: Differential Privacy & Responsible AI Review
+
+**Difficulty:** Beginner (review/analysis, not implementation)
+**Area:** Privacy-Preserving Federated Learning / AI Governance
+**Detailed issue:** [issues/dp-governance-review-starter-task.md](issues/dp-governance-review-starter-task.md)
+
+A self-contained, no-coding-required entry point for contributors coming from an AI governance / responsible-AI / policy background rather than deep systems engineering. Review the three DP mechanisms already implemented for client model updates and assess them from a "what privacy claims can we honestly make" angle. Good first step before taking on implementation work in issue #1 below.
+
 ### 1. Differential Privacy Improvements
 
 **Difficulty:** Beginner → Intermediate  
