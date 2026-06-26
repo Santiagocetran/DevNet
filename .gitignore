@@ -30,3 +30,6 @@ tasks/local/0x4657105FC932625CD289107aAE7B2174a822b709/services/__pycache__/*
 /dincli/README.md
 foundry/.github/*
 
+# local virtualenvs (e.g. baseline testing)
+.venv*/
+

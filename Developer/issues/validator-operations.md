@@ -34,7 +34,7 @@ DIN is still early, and the current CLI/devnet path is intentionally lightweight
 
 Current gaps include:
 
-- no standard Docker Compose run path for validators
+- no standard Docker Compose run path for validators — **Addressed for devnet by `din-node`; see `dincli/docker/node/` (PR #12).**
 - no documented one-command start, stop, and upgrade flow
 - no clear production key-management guidance beyond local wallet configuration
 - no published resource ceilings per role
@@ -208,8 +208,8 @@ The goal is to avoid asking early validators to join an empty or opaque network.
 
 ### Phase 1: Devnet Operator Baseline
 
-- Add Docker Compose for local validator operation.
-- Document start, stop, upgrade, logs, and volume cleanup.
+- Add Docker Compose for local validator operation. — **Status (2026-06):** Addressed for devnet by `din-node` — see `dincli/docker/node/` (PR #12).
+- Document start, stop, upgrade, logs, and volume cleanup. — **Status (2026-06):** Covered by `dincli/docker/node/README.md`.
 - Replace plaintext private-key guidance with passphrase-protected keystore guidance.
 - Publish initial resource guidance for aggregator and auditor roles.
 - Add a basic slashing and failure-mode document.
