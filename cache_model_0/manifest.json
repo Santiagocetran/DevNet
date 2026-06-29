@@ -209,7 +209,7 @@
          "artifact": {
             "type": "hardhat-artifact",
             "path": "contracts/abis/DINTaskAuditor.json",
-            "ipfs": null,
+            "ipfs": "bafybeifysyayopr2yng7qttryhzgo5obz7xdpapaeumszqtqtdqn6mzxla",
             "stakeholders": [
                "modelowner",
                "auditors",

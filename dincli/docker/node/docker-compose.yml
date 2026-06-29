@@ -24,6 +24,14 @@ services:
     image: din-node:dev
     container_name: din-node
 
+    # Share the host's network namespace so dincli can reach host-side devnet
+    # services (anvil/hardhat at 127.0.0.1:8545, an IPFS daemon at
+    # 127.0.0.1:5001) with no port mapping or rpc_url changes. Consistent with
+    # the existing trust model: the mounted Docker socket already grants
+    # root-equivalent host access, and state is bind-mounted at identical host
+    # paths for the same "looks like the host" reason.
+    network_mode: host
+
     # Run as the host operator's uid/gid so files written into the bind-mounted
     # state dir (and into worker output dirs, which workers create as this uid)
     # stay owned by the host user instead of root.
@@ -42,7 +50,7 @@ services:
     # the path it passes is valid on the host daemon because it's the same path.
     #   CONFIG_DIR       = $XDG_CONFIG_HOME/dincli         (wallet/config)
     #   CACHE_DIR        = $XDG_CACHE_HOME/dincli          (manifests/models/jobs)
-    #   DOCKER_CACHE_DIR = $XDG_CACHE_HOME/dincli-docker   (worker pip packages)
+    #   WORKER_CACHE_DIR = $XDG_CACHE_HOME/dincli-worker   (worker pip packages)
     # NOTE: DIN_STATE_DIR uses required (`:?`) interpolation everywhere. If it is
     # unset, `docker compose` aborts instead of silently rendering /config,
     # /cache and a broken ':' volume — which would defeat the identical-path

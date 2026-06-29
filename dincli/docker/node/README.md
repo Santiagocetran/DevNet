@@ -155,7 +155,7 @@ source .env                       # so $DIN_STATE_DIR is set
 # without producing nested config/dincli/dincli paths).
 mkdir -p "$DIN_STATE_DIR/config/dincli" \
          "$DIN_STATE_DIR/cache/dincli" \
-         "$DIN_STATE_DIR/cache/dincli-docker"
+         "$DIN_STATE_DIR/cache/dincli-worker"
 
 # Copy *contents* into the existing dirs (trailing /. ), preserving perms/links.
 # 1. Wallet + config  (MUST succeed — this is your keys)
@@ -163,7 +163,7 @@ cp -a ~/.config/dincli/.        "$DIN_STATE_DIR/config/dincli/"
 # 2. Manifests / models / job files
 cp -a ~/.cache/dincli/.         "$DIN_STATE_DIR/cache/dincli/"
 # 3. Worker package cache (optional — re-downloaded if skipped)
-cp -a ~/.cache/dincli-docker/.  "$DIN_STATE_DIR/cache/dincli-docker/"
+cp -a ~/.cache/dincli-worker/.  "$DIN_STATE_DIR/cache/dincli-worker/"
 
 # Re-own everything as the container user
 sudo chown -R "$DIN_UID:$DIN_GID" "$DIN_STATE_DIR"
@@ -246,14 +246,14 @@ identical path inside the container**.
 $DIN_STATE_DIR/
 ├── config/dincli/            → CONFIG_DIR        wallet.json, config.json, .session
 ├── cache/dincli/             → CACHE_DIR         manifests, downloaded models, job files
-└── cache/dincli-docker/      → DOCKER_CACHE_DIR  pip-installed worker packages (can be large)
+└── cache/dincli-worker/      → WORKER_CACHE_DIR  pip-installed worker packages (can be large)
 ```
 
 | Directory | Survives upgrade? | Safe to delete? |
 | --- | --- | --- |
 | `config/dincli/` | **Yes — and you must keep it** | ❌ **No.** This is your **wallet and config.** Losing it loses your keys. Back it up. |
 | `cache/dincli/` | Yes | ⚠️ Mostly. Re-downloaded from chain/IPFS on next use. Don't delete mid-job. |
-| `cache/dincli-docker/` | Yes | ✅ **Yes.** Worker package cache; reclaim disk freely. Reinstalled on next job. |
+| `cache/dincli-worker/` | Yes | ✅ **Yes.** Worker package cache; reclaim disk freely. Reinstalled on next job. |
 
 > The commands below use `$DIN_STATE_DIR`. `docker compose` reads `.env`
 > internally, but your shell does not — so in a fresh shell run `source .env`
@@ -262,7 +262,7 @@ $DIN_STATE_DIR/
 **Reclaim disk (safe):**
 ```bash
 source .env        # so $DIN_STATE_DIR is set in your shell
-rm -rf "$DIN_STATE_DIR/cache/dincli-docker"
+rm -rf "$DIN_STATE_DIR/cache/dincli-worker"
 ```
 
 **Full teardown (DESTROYS YOUR WALLET — back up `config/` first):**

@@ -6,7 +6,7 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Optional, Sequence
 
-from dincli.cli.utils import DOCKER_CACHE_DIR
+from dincli.cli.utils import WORKER_CACHE_DIR
 
 WORKER_IMAGE = "din-worker:dev"
 
@@ -62,14 +62,14 @@ def get_worker_packages_dir(network: str, model_id: int) -> Path:
     # Shared across clients/auditors/aggregators for a given model: they're
     # expected to pin the same manifest requirements.txt, so one install
     # serves all roles instead of duplicating multi-GB dependencies per role.
-    return DOCKER_CACHE_DIR / network / f"model_{model_id}" / "worker-packages"
+    return WORKER_CACHE_DIR / network / f"model_{model_id}" / "worker-packages"
 
 
 def ensure_worker_packages_installed(requirements_path: Path, packages_dir: Path, console) -> Optional[Path]:
     """Install whatever the model owner pinned in the manifest's requirements.txt.
 
     Installed once per requirements.txt content (tracked by hash) into
-    DOCKER_CACHE_DIR, kept separate from the dincli cache so the install
+    WORKER_CACHE_DIR, kept separate from the dincli cache so the install
     container never touches manifest/service/wallet state.
     """
     if not requirements_path.exists():

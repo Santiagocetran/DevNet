@@ -33,4 +33,9 @@ where = ["."]  # look in project root
 include = ["dincli*"]  # only include dincli and subpackages
 
 [tool.setuptools.package-data]
-dincli = ["config/*.json", "abis/*", "docker/**/*"]
+dincli = ["config/*.json", "abis/*", "docker/worker/*", "services/*.py"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: marks tests that require a live Hardhat node, IPFS daemon, and Docker",
+]

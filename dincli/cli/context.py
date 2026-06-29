@@ -172,11 +172,17 @@ class DinContext:
             # Local task flow. Here get_manifest() reads directly from the
             # current project's tasks directory; the base path mirrors that
             # location so manifest paths can be joined without special cases.
-            return (
-                get_manifest(
+            # Return (None, None) when the manifest doesn't exist yet so that
+            # callers can fall back to bundled ABIs (e.g. during early deploy).
+            try:
+                manifest_data = get_manifest(
                     self.network,
                     task_coordinator_address=taskCoordinator_address,
-                ),
+                )
+            except FileNotFoundError:
+                return None, None
+            return (
+                manifest_data,
                 Path.cwd() / "tasks" / self.network.lower() / taskCoordinator_address,
             )
 
@@ -248,11 +254,17 @@ class DinContext:
         # contract. If "ipfs" is present, ensure_file_exists also refreshes the
         # file when the CID changes. If "ipfs" is None, it acts as a local file
         # presence check, which is useful for task directories and local caches.
-        self.ensure_file_exists(
-            artifact_path,
-            artifact_entry.get("ipfs"),
-            f"{contract_key} ABI",
-        )
+        # Fall back to the bundled ABI when the file is missing and no CID is
+        # available to fetch it (e.g. model_id-based access before ABI cache is
+        # populated).
+        try:
+            self.ensure_file_exists(
+                artifact_path,
+                artifact_entry.get("ipfs"),
+                f"{contract_key} ABI",
+            )
+        except FileNotFoundError:
+            return Path(str(default_artifact_path))
 
         # get_contract_instance() accepts either a Hardhat artifact or a minimal
         # {"abi": [...]} JSON file, so the resolver only needs to return the

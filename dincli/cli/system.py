@@ -1,6 +1,8 @@
 import json
 import os
 import shutil
+import subprocess
+import tempfile
 from datetime import datetime, timedelta
 from decimal import Decimal
 from getpass import getpass
@@ -9,12 +11,13 @@ from pathlib import Path
 from typing import Optional
 from rich.console import Console
 import typer
+import time
 from eth_account import Account
 from rich.prompt import Confirm
 
 from dincli.cli.contract_utils import erc20_abi, router_abi
 from dincli.cli.utils import (CACHE_DIR, CONFIG_DIR,
-                              CONFIG_FILE,
+                              CONFIG_FILE, WORKER_CACHE_DIR,
                               print_tx_info,
                               SUPPORTED_IPFS_PROVIDERS, _get_password,
                               _confirm_or_exit,
@@ -34,6 +37,11 @@ app.add_typer(dataset_app, name="dataset")
 WALLET_FILE = CONFIG_DIR / "wallet.json"
 
 
+def _is_inside_container() -> bool:
+    """Return True when running inside a Docker container (/.dockerenv is the canonical marker)."""
+    return Path("/.dockerenv").exists()
+
+
 def initialize_directories():
     """
     Create user-level config and cache dirs if they do not exist.
@@ -41,7 +49,8 @@ def initialize_directories():
     """
     os.makedirs(CONFIG_DIR, exist_ok=True)
     os.makedirs(CACHE_DIR, exist_ok=True)
-    print(f"Initialized directories:\n- Config: {CONFIG_DIR}\n- Cache: {CACHE_DIR}")
+    os.makedirs(WORKER_CACHE_DIR, exist_ok=True)
+    print(f"Initialized directories:\n- Config: {CONFIG_DIR}\n- Cache: {CACHE_DIR} \n- Worker Cache: {WORKER_CACHE_DIR}")
 
 @app.callback(invoke_without_command=True)
 def system(
@@ -58,7 +67,7 @@ def system(
     ),
 ):
     # If the subcommand is one that doesn't need an account, we skip the default setup logic
-    if ctx.invoked_subcommand in ["connect-wallet", "init", "welcome", "where", "configure-network", "configure-demo", "read_wallet", "show_index", "din-info", "configure-logging", "dump-abi", "reset-all", "todo", "dataset", "send-eth"]:
+    if ctx.invoked_subcommand in ["connect-wallet", "init", "welcome", "where", "configure-network", "configure-demo", "read_wallet", "show_index", "din-info", "configure-logging", "dump-abi", "reset-all", "todo", "dataset", "send-eth", "run-worker-counting", "run-node-counting"]:
         return
 
     effective_network, w3, account, console = ctx.obj.get_en_w3_account_console()
@@ -87,7 +96,77 @@ def where(ctx: typer.Context):
     """Print where dincli is installed."""
     typer.secho("dincli is installed at: ", fg="green", nl=False)
     typer.secho(f"{files('dincli')}", fg="magenta")
+
+@app.command("run-node-counting")
+def run_node_counting():
+    """Run the counting task."""
+    typer.echo("Running the counting task...")
+    n = 0
+    while True:
+        n += 1
+        time.sleep(1)
+        typer.echo(f"DIN Node Count: {n}")
+
+
+@app.command("run-worker-counting")
+def run_worker_counting(
+    count: int = typer.Option(10, "--count", "-n", help="Number of counts (0 for infinite)"),
+    delay: float = typer.Option(1.0, "--delay", "-d", help="Seconds between counts"),
+):
+    """Run a counting task inside the DIN worker container."""
+    from dincli.cli.worker import ensure_worker_image, write_worker_job, WORKER_IMAGE
+
+    console = Console()
+
+    try:
+        ensure_worker_image(console)
+    except RuntimeError as e:
+        console.print(f"[bold red]{e}[/bold red]")
+        raise typer.Exit(1)
+
     
+    model_dir = Path(CACHE_DIR / "model_tmp")
+    model_dir.mkdir(parents=True, exist_ok=True)
+    (model_dir / "manifest.json").write_text("{}\n", encoding="utf-8")
+
+    svc_dir = model_dir / "services"
+    svc_dir.mkdir()
+    svc_src = Path(str(files("dincli"))) / "services" / "counting_service.py"
+    shutil.copy(svc_src, svc_dir / "counting_service.py")
+
+    job_path, output_dir = write_worker_job(
+        model_dir / "jobs",
+        "counting",
+        {
+            "network": "local",
+            "model_base_dir": "/din/model",
+            "manifest_path": "/din/model/manifest.json",
+            "role": "system",
+            "service_path": "services/counting_service.py",
+            "function_name": "run_counting",
+            "kwargs": {"count": count, "delay": delay},
+        },
+    )
+
+    cmd = [
+        "docker", "run", "--rm",
+        "--name", "din-worker-counting",
+        "--user", f"{os.getuid()}:{os.getgid()}",
+        "-e", "HOME=/tmp",
+        "--network", "none",
+        "-v", f"{model_dir.resolve()}:/din/model:ro",
+        "-v", f"{job_path.resolve()}:/din/job/job.json:ro",
+        "-v", f"{output_dir.resolve()}:/din/output:rw",
+        WORKER_IMAGE,
+    ]
+
+    console.print("[bold cyan]Starting worker counting container (Ctrl+C to stop)...[/bold cyan]")
+    try:
+        subprocess.run(cmd, check=False)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Worker counting stopped.[/yellow]")
+
+
 @app.command()
 def welcome():
     """Print welcome message."""
@@ -95,13 +174,26 @@ def welcome():
 
 @app.command("get-cache-dir")
 def get_cache_dir():
-    """Print the path to the cache directory."""
-    typer.echo(f"[bold green]Cache Directory:[/bold green] {CACHE_DIR}")
+    """Print cache directory paths used by dincli."""
+    if _is_inside_container():
+        typer.echo("Environment: DIN node container")
+        typer.echo("(DIN_STATE_DIR is bind-mounted at the identical host path, so paths below are valid on the host daemon too)")
+    else:
+        typer.echo("Environment: host")
+    typer.echo(f"Cache Directory:        {CACHE_DIR}")
+    typer.echo(f"Worker Node Cache Directory: {WORKER_CACHE_DIR}")
 
 @app.command("get-config-dir")
 def get_config_dir():
-    """Print the path to the config directory."""
-    typer.echo(f"[bold green]Config Directory:[/bold green] {CONFIG_DIR}")
+    """Print config directory path used by dincli."""
+    if _is_inside_container():
+        typer.echo("Environment: DIN node container")
+        typer.echo("(DIN_STATE_DIR is bind-mounted at the identical host path, so path below is valid on the host daemon too)")
+    else:
+        typer.echo("Environment: host")
+    typer.echo(f"Config Directory: {CONFIG_DIR}")
+
+
 
 @app.command("init")
 def initialize():
