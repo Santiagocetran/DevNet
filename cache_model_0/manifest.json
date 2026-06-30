@@ -107,7 +107,7 @@
    "train_client_model": {
       "type": "custom",
       "path": "services/client.py",
-      "ipfs": "bafybeic5jekza5sxec2voknontekxfmz6snlhew3eb2nsyb6sb6qx6mhfe",
+      "ipfs": "bafybeidhtmexaoauz6lqijjao3trc3vetfscnigyh2esev4n2esysf4tj4",
       "stakeholders": [
          "clients"
       ]
@@ -123,7 +123,15 @@
    "Score_model_by_auditor": {
       "type": "custom",
       "path": "services/auditor.py",
-      "ipfs": "bafybeif4q2tfaexdflj3bd746ylrkwpprhsw4ozqayowrqtako72ij3zqa",
+      "ipfs": "bafybeidv7xkfpzuakf3if6gyfrlx7jvqxyile5kkxjtzukhdlbhmbzvb5m",
+      "stakeholders": [
+         "auditors"
+      ]
+   },
+   "ScoringUtils": {
+      "type": "custom",
+      "path": "services/scoring.py",
+      "ipfs": "bafybeienjixlnr3pmsiwuuffrvnqbrucfwvn2awrkx77zdlieacldgzmvq",
       "stakeholders": [
          "auditors"
       ]
@@ -131,7 +139,7 @@
    "get_aggregated_cid_t1": {
       "type": "custom",
       "path": "services/aggregator.py",
-      "ipfs": "bafybeialydfrws6jozf64maz65h772ms6ukc364gjjwslr2jfhvk7r7j2a",
+      "ipfs": "bafybeiflktdfbjbegsy3gqrskzxlx4czbwfxo44m2co4eln3a72iie2tnq",
       "stakeholders": [
          "aggregators"
       ]
@@ -139,7 +147,7 @@
    "get_aggregated_cid_t2": {
       "type": "custom",
       "path": "services/aggregator.py",
-      "ipfs": "bafybeialydfrws6jozf64maz65h772ms6ukc364gjjwslr2jfhvk7r7j2a",
+      "ipfs": "bafybeiflktdfbjbegsy3gqrskzxlx4czbwfxo44m2co4eln3a72iie2tnq",
       "stakeholders": [
          "aggregators"
       ]

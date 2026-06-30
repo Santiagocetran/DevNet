@@ -97,6 +97,8 @@ def train_lms(
     ctx: typer.Context,
     model_id: int = typer.Argument(..., help="Model index"),
     gi: Optional[int] = typer.Option(None, "--gi", help="Global iteration to use"),
+    packages_dir: Optional[str] = typer.Option(None, "--packages-dir", help="Packages directory"),
+    no_cache: bool = typer.Option(False, "--no-cache", help="Do not use cached packages"),
 ):
 
     effective_network, w3, account, console = ctx.obj.get_en_w3_account_console(model_id)
@@ -133,16 +135,18 @@ def train_lms(
 
     client_requirements_cid = runtime.get_manifest_key("requirements.txt", {}).get("clients")
     requirements_path = get_worker_requirements_path(model_base_dir, "clients")
-    packages_dir = None
+    packages_dir = Path(packages_dir) if packages_dir else None
     if client_requirements_cid:
         ctx.obj.ensure_file_exists(requirements_path, client_requirements_cid, "client requirements")
         try:
             ensure_worker_image(console)
-            packages_dir = ensure_worker_packages_installed(
-                requirements_path,
-                get_worker_packages_dir(effective_network, model_id),
-                console,
-            )
+
+            if not no_cache and packages_dir is None:
+                packages_dir = ensure_worker_packages_installed(
+                    requirements_path,
+                    get_worker_packages_dir(effective_network, model_id),
+                    console,
+                )
         except RuntimeError as e:
             console.print(f"[bold red]{e}[/bold red]")
             raise typer.Exit(1)

@@ -1,5 +1,6 @@
 from pathlib import Path
 import time
+from typing import Optional
 
 import typer
 from rich.table import Table
@@ -268,6 +269,8 @@ def evaluate_lms(
     batch: int = typer.Option(None, "--batch", help="Batch index"),
     submit: bool = typer.Option(False, "--submit", help="Submit evaluation"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
+    packages_dir: Optional[str] = typer.Option(None, "--packages-dir", help="Packages directory"),
+    no_cache: bool = typer.Option(False, "--no-cache", help="Do not use cached packages"),
 ):
 
     effective_network, w3, account, console = ctx.obj.get_en_w3_account_console(model_id)
@@ -289,16 +292,17 @@ def evaluate_lms(
 
     auditor_requirements_cid = get_manifest_key(effective_network, "requirements.txt", model_id).get("auditors")
     requirements_path = get_worker_requirements_path(model_base_dir, "auditors")
-    packages_dir = None
+    packages_dir = Path(packages_dir) if packages_dir else None
     if auditor_requirements_cid:
         ctx.obj.ensure_file_exists(requirements_path, auditor_requirements_cid, "auditor requirements")
         try:
             ensure_worker_image(console)
-            packages_dir = ensure_worker_packages_installed(
-                requirements_path,
-                get_worker_packages_dir(effective_network, model_id),
-                console,
-            )
+            if not no_cache and packages_dir is None:
+                packages_dir = ensure_worker_packages_installed(
+                    requirements_path,
+                    get_worker_packages_dir(effective_network, model_id),
+                    console,
+                )
         except RuntimeError as e:
             console.print(f"[bold red]{e}[/bold red]")
             raise typer.Exit(1)
@@ -346,10 +350,17 @@ def evaluate_lms(
             manifest = get_manifest_key(effective_network, "Score_model_by_auditor", model_id)
             auditor_service_path = model_base_dir / Path(manifest["path"])
             model_service_path = model_base_dir / Path(get_manifest_key(effective_network, "ModelArchitecture", model_id)["path"])
+            scoring_manifest = get_manifest_key(effective_network, "ScoringUtils", model_id)
+            scoring_service_path = model_base_dir / Path(scoring_manifest["path"])
 
             require_custom_manifest_service(manifest, "Score_model_by_auditor")
             ctx.obj.ensure_file_exists(auditor_service_path, manifest["ipfs"], "auditor service")
             ctx.obj.ensure_file_exists(model_service_path, get_manifest_key(effective_network, "ModelArchitecture", model_id)["ipfs"], "model service")
+            # auditor.py imports `scoring` as a sibling module via sys.path
+            # rather than a package import, so it must be materialized at the
+            # same local services/ path dincli derives from the manifest
+            # before the worker container can import it.
+            ctx.obj.ensure_file_exists(scoring_service_path, scoring_manifest["ipfs"], "scoring utils")
 
             # dincli fetches every IPFS-addressed input on the host; the
             # container only ever sees already-materialized local files at the

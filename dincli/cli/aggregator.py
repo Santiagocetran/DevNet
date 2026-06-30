@@ -1,5 +1,6 @@
 from pathlib import Path
 import time
+from typing import Optional
 import typer
 from rich.table import Table
 from web3 import Web3
@@ -201,6 +202,8 @@ def aggregate_t1(
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
     submit: bool = typer.Option(False, "--submit", help="Submit aggregation to task coordinator"),
     batch_id: int = typer.Option(None, "--batch", help="Batch ID"),
+    packages_dir: Optional[str] = typer.Option(None, "--packages-dir", help="Packages directory"),
+    no_cache: bool = typer.Option(False, "--no-cache", help="Do not use cached packages"),
 ):
     effective_network, w3, account, console = ctx.obj.get_en_w3_account_console(model_id)
 
@@ -255,16 +258,17 @@ def aggregate_t1(
 
         aggregator_requirements_cid = get_manifest_key(effective_network, "requirements.txt", model_id).get("aggregators")
         requirements_path = get_worker_requirements_path(model_base_dir, "aggregators")
-        packages_dir = None
+        packages_dir = Path(packages_dir) if packages_dir else None
         if aggregator_requirements_cid:
             ctx.obj.ensure_file_exists(requirements_path, aggregator_requirements_cid, "aggregator requirements")
             try:
                 ensure_worker_image(console)
-                packages_dir = ensure_worker_packages_installed(
-                    requirements_path,
-                    get_worker_packages_dir(effective_network, model_id),
-                    console,
-                )
+                if not no_cache and packages_dir is None:
+                    packages_dir = ensure_worker_packages_installed(
+                        requirements_path,
+                        get_worker_packages_dir(effective_network, model_id),
+                        console,
+                    )
             except RuntimeError as e:
                 console.print(f"[bold red]{e}[/bold red]")
                 raise typer.Exit(1)
@@ -350,10 +354,12 @@ def aggregate_t2(
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
     submit: bool = typer.Option(False, "--submit", help="Submit aggregation to task coordinator"),
     batch_id: int = typer.Option(None, "--batch", help="Batch ID"),
+    packages_dir: Optional[str] = typer.Option(None, "--packages-dir", help="Packages directory"),
+    no_cache: bool = typer.Option(False, "--no-cache", help="Do not use cached packages"),
 ):
 
     effective_network, w3, account, console = ctx.obj.get_en_w3_account_console(model_id)
-    
+
     taskCoordinator_contract = ctx.obj.get_deployed_din_task_coordinator_contract(True, model_id)
     
     curr_GI, GIstate = ctx.obj.get_current_gi_and_state(taskCoordinator_contract)
@@ -408,16 +414,17 @@ def aggregate_t2(
 
         aggregator_requirements_cid = get_manifest_key(effective_network, "requirements.txt", model_id).get("aggregators")
         requirements_path = get_worker_requirements_path(model_base_dir, "aggregators")
-        packages_dir = None
+        packages_dir = Path(packages_dir) if packages_dir else None
         if aggregator_requirements_cid:
             ctx.obj.ensure_file_exists(requirements_path, aggregator_requirements_cid, "aggregator requirements")
             try:
                 ensure_worker_image(console)
-                packages_dir = ensure_worker_packages_installed(
-                    requirements_path,
-                    get_worker_packages_dir(effective_network, model_id),
-                    console,
-                )
+                if not no_cache and packages_dir is None:
+                    packages_dir = ensure_worker_packages_installed(
+                        requirements_path,
+                        get_worker_packages_dir(effective_network, model_id),
+                        console,
+                    )
             except RuntimeError as e:
                 console.print(f"[bold red]{e}[/bold red]")
                 raise typer.Exit(1)
