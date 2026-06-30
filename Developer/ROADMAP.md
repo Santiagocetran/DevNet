@@ -26,6 +26,11 @@ CIDv1 migration; `dincli` release; full documentation and flow guides; stakehold
 
 DIN devnet live on Optimism Sepolia. `dincli v0.1.0` released. Validator onboarding flows documented. Public devnet accessible.
 
+### Still to Do 
+
+Migration to Foundry
+
+
 ---
 
 ## P3: Cryptoeconomic Layer and Network Hardening
@@ -870,3 +875,280 @@ Deliverables:
 ### Phase Outcome
 
 By the end of P4, DIN has an operational daemon capable of autonomous task discovery, execution, evaluation, and coordination across roles, significantly improving usability, efficiency, and network participation at scale.
+
+
+# Discussion
+
+
+Step 1: Devnet - remaining protocol elements. (Interns to execute)
+Step 2: Testnet - how do we achieve, and what do we need to get there.
+
+Advanced Testnet - economics of staking.
+
+net profit of staking and computation resources of validators
+
+Apply a network fee in the testnet - using dummy ETH
+
+Advanced Testnet - economics of staking.
+
+If this is something that Robbert and you come onto, use a dummy fee. Set to something reasonable or explore solutions
+Finalize all economics toward advanced testing
+
+
+
+
+
+Edge City requirements have been met — the funds have been released to us in full.
+
+And thanks for this - perhaps we update it using the below if it is helpful?)
+We also previously created a Google Doc here:
+ https://docs.google.com/document/d/1t7vC68RtUzPBzn9lySj_TYhxtvgp8s2RTtV6077ar8M/edit?tab=t.0#heading=h.fydl91nws9bi
+
+ An earlier version was shared to keep everything up to date.
+
+From an engineering perspective, auditing and aggregation need to be fully functional across validators (is the basic socring mechanisms implemented? e.g., blockflow,  or substra, or https://github.com/LabeliaLabs/distributed-learning-contributivity - some links and exampels given in the Whitepaper), and we should also take a step back to simplify, fix bugs, and improve documentation before scaling further. We’ll also ask interns to bring in 2–3 validator partners to participate to boost our pool.
+
+What priorities do you see on your side for the next phase? On priorities: slashing, staking, tokenomics, network fees, rewards, scoring, and DAO-governed protocol controls all seem important areas to focus on.
+
+https://github.com/InfiniteZeroFoundation/DevNet/blob/develop/Developer/ROADMAP.md
+
+this is the roadmap but its little stale. to complete edge city requirements, can you clarify what actually we need in writing.
+
+As per my meeting notes at fireflies, since, containerization is done, we should move to tokenization and DAO governance.
+
+but i believe DAO and governance is not the requirement for edge city.
+
+Moreover there is some work based on feedback from advisors/ validators 
+
+
+
+
+Hi Abraham,
+
+Thank you for the follow-up. Glad to be in motion on this.
+
+Before I spin up a node I want to be transparent about the operator-side bar I'm working from, because Venus runs on the same infrastructure that operates Artizen's day-to-day, and the bar has to match that. Going through your setup docs, getting-started guide, and the whitepaper end-to-end before any commit. Strong work on the federated-learning architecture; the Aggregator / Auditor / Client split is clean.
+
+Here is what I would need before I bring a node online. None of this is gatekeeping; these are the same hygiene items any production validator network ends up needing, and getting them in place now will help every validator who comes after me.
+
+ Operational requirements I would treat as blocking
+• Containerized run path (Docker / docker-compose, one-command start/stop/upgrade)
+• No plaintext private keys in .env (passphrase-prompted keystore or vault-backed; 1Password CLI works)
+• Documented resource ceiling (RAM/CPU/disk/network)
+• Graceful SIGTERM handling that does not corrupt local state on restart
+
+ Strong preferences (negotiable)
+• HTTP /health endpoint for watchdog monitoring
+• Structured stdout logs
+• Network isolation guidance
+• launchd/systemd unit for clean restart
+• Slashing rules + known failure modes documented
+• Confirmation at least one other validator publicly online before I join
+
+
+
+
+
+P.S. Feedback from validator:
+
+>Small bug in dincli — it re-approves each time but submits the stake with a stale nonce. The approval already went through, allowance is set. They are setting stake manually
+
+
+
+
+Feedback from developer/validator for us @Umer
+
+Some small notes on installer
+
+- Not obvious how the get the filebase API key (had to create a bucket etc, state this)
+- Personally prefer uv so I made some small changes to run like so
+
+```bash
+# Check current Global Iteration state
+uv run dincli task gi show-state 0
+
+# Explore model info
+uv run dincli task explore 0
+
+# Check ETH balance
+uv run dincli system --eth-balance
+
+# Connect wallet (if keystore missing)
+uv run dincli system connect-wallet --account 0
+## Aggregator flow
+
+Only relevant when GI state is DINaggregatorsRegistrationStarted:
+
+uv run dincli aggregator dintoken buy 0.00001
+uv run dincli aggregator dintoken stake 10
+uv run dincli aggregator register 0
+When state reaches T1AggregationStarted:
+
+uv run dincli aggregator show-t1-batches 0 --detailed
+uv run dincli aggregator aggregate-t1 0 --submit
+Also its not stated what wallets should will be used for; I would guide users to setup a buner wallet explicitlly
+
+https://openwallet.sh/ is dead simple on CLI
+OWS - Open Wallet Standard
+OWS - Open Wallet Standard
+An open standard for secure local wallet storage and agent access. One interface for all chains, all agents, all tools.
+
+
+
+
+Short version: TKNN is the wrong tool for us, and we don't actually need it.
+
+TKNN-Shapley values individual *data samples* — it needs the raw points to score them. Our validators only ever see the model update, not the client's samples, and we've ruled out MPC/TEE/ZKP and any sample disclosure. So there's no way for a validator to run it: the score is a function of the data, and the data never reaches the validator. That's an information-theoretic wall, not an engineering gap. It can only ever live client-side as a curation tool, which doesn't help us.
+
+The good news: for what we actually want right now — detecting poisonous models — none of that matters. Poison detection runs on the model update, which is exactly what our validators already hold.
+
+What to do:
+- Our current method (score the update on validation data, reject if it degrades performance) is already a poison detector for the crude attacks — garbage updates, label-flipping, sign-flipping, scaling.
+- Harden it with cheap model-space checks: norm bounding (poison updates tend to be abnormally large) + cosine/distance to the consensus/median update (poison points away from where honest clients cluster). Krum or coordinate-wise median formalize this. All on the weights, no crypto, no samples.
+
+One thing to decide — threat model:
+- Crude poisoning hurts validation accuracy → val-gating + outlier checks catch it.
+- Backdoors don't — a backdoored model keeps normal clean accuracy and only misbehaves on a hidden trigger, so it sails through validation. If backdoors are in scope we'd need model-inspection defenses (activation clustering / spectral signatures / pruning) — still on the model, but more involved.
+
+Which threat are we actually worried about? That decides how far we build detection out.
+
+On rewards — not building it now, but the path is clear and reuses the same machinery. We let the market set the total price (the pool), and distribute it by each client's score weighted by how much their weight update actually improved the global model. So the same number our validators already compute for detection doubles as the reward signal — no extra valuation layer needed. Key detail when we get there: score the *marginal* improvement to the current global model, not the update in isolation, so redundant/duplicate updates earn ~nothing and we get diminishing-returns-on-duplicate-data for free (the one Shapley property worth keeping, without any of the Shapley machinery).
+
+(Footnote: TKNN-Shapley's own benchmark is literally mislabel/noisy-sample detection — so it *is* a poison detector, just one that needs the raw samples. Right idea, wrong layer for us.) (edited) 
+[6:31 PM]
+Here's the validator-side algorithm. It does both jobs at once — the marginal-gain number is the poison gate and the future reward weight, so there's no separate valuation pass.
+
+python
+
+# Run by each validator, once per round.
+# In:  global model M_g, candidate updates {u_1..u_n}, validation set D_val
+# Knobs: norm_cap, min_gain (ε), n_perms
+def validator_round(M_g, updates, D_val):
+    survivors = []
+    med_dir = median_direction(updates)        # consensus direction
+# 1. Cheap pre-filter — kill obvious poison before any eval
+    for i, u in updates:
+        if norm(u) > norm_cap:      continue   # scaling attack
+        if cos_sim(u, med_dir) < 0: continue   # points against the majority
+        survivors.append((i, u))
+
+# 2. Marginal scoring — averaged over a few random orders
+    score  = {i: 0 for i, _ in survivors}
+    votes  = {i: 0 for i, _ in survivors}
+    for _ in range(n_perms):
+        M = M_g
+        for i, u in shuffle(survivors):
+            gain = acc(M ⊕ u, D_val) - acc(M, D_val)   # vs CURRENT model
+            if gain > min_gain:        # helps → accept
+                score[i] += gain
+                votes[i] += 1
+                M = M ⊕ u              # fold in → a duplicate now scores ~0
+            # gain ≤ min_gain → no help or harmful → poison, dropped
+    score = {i: s / n_perms for i, s in score.items()}
+
+accept = {i for i in score if votes[i] > n_perms / 2}
+    return accept, score   # score = marginal gain, reused later as reward weight
+Then the cross-validator layer (this is what makes "our validators," plural, robust to a malicious validator):
+
+
+
+python
+
+final_accept(i) = majority_vote over validators of (i in accept_v)
+final_score(i)  = median over validators of score_v[i]        # accepted i only
+# when rewards turn on — market sets `pool`:
+reward(i) = pool * final_score(i) / sum_j final_score(j)
+The pieces that matter:
+⊕ is just applying the weight delta. min_gain (ε) is the single dial that does poison detection — anything that doesn't improve the current model is rejected — and the same gain value, normalized, becomes the reward weight. The sequential fold-in (M = M ⊕ u) is what gives you duplicate-data discounting for free: once a good update is in the running model, a copy of it scores ~0. Averaging over n_perms random orders removes the "whoever's evaluated first gets the credit" unfairness — that's literally a few-permutation Monte-Carlo Shapley over the updates. n_perms = 1 is the cheap baseline for detection; bump it only when you turn rewards on and want fairer attribution. median across validators tolerates up to ~half of them being malicious.
+Cost is n_perms × n validation passes per validator per round — cheap and fully parallelizable. The one gap to remember: this catches crude poison but not backdoors, since a backdoored update still posts a positive gain on clean validation data.
+[6:33 PM]
+DP-on-updates is arguably the privacy layer your design was missing. Remember I flagged earlier that raw weight updates leak training data (gradient inversion, membership inference)? DP on the update closes exactly that hole, so "validators only see the model" becomes genuinely private rather than nominally private. The algorithm itself doesn't care — it operates on whatever update arrives, noisy or not.
+The clean way to think about the tradeoff: DP has two halves, and they pull in opposite directions for you.
+The clipping half (bounding each update to norm C) actually helps robustness — it's the same thing as your norm_cap check, and bounding per-client influence is literally how several poisoning/backdoor defenses work. A malicious client can't move the model much if every update is clipped. So this half is synergistic, not a cost.
+The noise half is what degrades detection, and it hits the components unevenly:
+• Marginal-gain scoring gets noisier — DP noise adds variance to acc(M ⊕ u). But the gain is a scalar aggregate over many parameters and many validation points, so the zero-mean weight noise largely averages out at the metric level; the effective noise on the score is far smaller than the per-coordinate noise looks. Your n_perms averaging and round-over-round accumulation shrink it further. It survives unless ε is very tight.
+• Cosine-to-consensus degrades the most — DP noise and poison both read as "deviation from the majority direction," so the check loses discriminative power. Under strong DP, lean on the gain gate and norm bound, downweight cosine.
+• Norm check — fine, even helped, since DP already clips.
+• Median across validators — unaffected; it just operates on noisier inputs.
+So the real dial is ε. Loose ε → scores and detection stay sharp, weaker privacy. Tight ε → strong privacy, but marginal gains blur toward the noise floor and subtle poison near the threshold becomes uncallable. You tune ε to keep typical gain comfortably above the noise floor — measurable empirically by checking the variance of gain on known-good updates at a candidate ε.
+One honest caveat and one bonus. The caveat: combining DP and Byzantine-robustness is a genuinely hard, active research tension — noise that protects privacy also masks malicious deviation, so you can't push both to the extreme for free. The bonus: the clipping that comes with DP is itself a poisoning bound, so strong DP can reduce backdoor effectiveness (no single update can dominate) — which partly offsets the fact that backdoors otherwise slip past the gain gate.
+[6:33 PM]
+In other words
+On privacy — and this is the good part: we can run all of this even with differential privacy applied to the weight updates, and it actually *strengthens* the design. DP on the update closes the gradient-leakage hole that raw weight sharing leaves open, so "validators only see the model" becomes genuinely private. The detection/scoring runs on the noisy updates unchanged. The clipping that comes with DP is synergistic — it's the same norm bound we already use, and it caps how much any single client can move the model, which is a poisoning defense in its own right (it even blunts backdoors). The only real cost is that the added noise blurs the marginal-gain signal slightly, so it's a tunable dial: pick ε loose enough that genuine gains stay above the noise floor. Net — fully doable, with a privacy-vs-sharpness knob we control.
+abraham nash  [6:46 PM]
+let me think this through - one moment @Umer
+[6:47 PM]
+Here's the mapping between BlockFLow (MIT, 2020) and our design — it lines up almost point for point:
+
+- Granularity: BlockFLow scores at the model/agent level, not per-sample — the same side of the wall we hit. Confirms per-sample was never the achievable target.
+- Privacy: it applies differential privacy directly to the shared model weights (Laplacian noise) — exactly our DP-on-updates step.
+- Robustness: it uses a median of scores as its aggregator and tolerates <50% malicious agents — the same principle as our median-across-validators. The only difference is *who* the median runs over: BlockFLow has no validators, so its median is taken over peer evaluations (every agent scores every other), whereas ours is taken over the group of dedicated validators scoring each client. Same robustness principle, different party — and in both cases the median is what bounds a single bad actor's influence.
+- Rewards: proportional payout from a pooled bond, paid in crypto — same as our market-pool-weighted-by-score path.
+- Detection: malicious models (random data, inverted labels) caught purely by their poor accuracy scores on honest evaluators' data — same mechanism as our marginal-gain / validation gating.
+
+The one piece of theirs we deliberately don't carry over: because their agents evaluate each other, they add a second term — an evaluation-honesty score that caps an agent's payout by how far its scores sit from the median — purely to stop peers from gaming each other. We don't need that. Our clients never evaluate anyone, so a client's reward is just its contribution score, and validator honesty is covered by staking plus the median across validators. Their second score solves a problem our architecture doesn't create. (edited) 
+[6:48 PM]
+@Umer this seems to work so we can update our roadmap and timing to try implementing this instead for now.
+
+Think it through - let's confirm on todays call
+check 64ca3c5f and f11fce22a for WP 3.1 3.2
+which is relevant for client and validators rewards but first we need scoring (auditing) for clients on which client rewards rely upon
+
+yeah, I think in this case we can try to replicate and take the approach of blockflow
+[6:25 PM]
+i.e., apply some median based scoring system for client model contributino, tested against its contribution to updating the global model
+
+
+Hi @Umer, My thoughts on filebase and filecoin.
+I'd appreciate your insights - how would filecoin work in practice? They have funding potentially.
+
+
+
+Yes — Filecoin can do this, and it's arguably a stronger fit than Filebase for your use case long term.
+What Filecoin offers over Filebase
+Filebase is an S3-compatible object storage layer that pins to IPFS — it's centralised infrastructure with an IPFS interface. It works well but Filebase itself is a single point of failure and trust. For a trustless network that's a philosophical tension.
+Filecoin is decentralised storage built natively on top of IPFS. Content is stored across a network of independent storage providers with cryptographic proof that data is actually being stored — called Proof of Replication and Proof of Spacetime. No single entity controls it.
+For your specific use case
+Model weight updates pushed by participants need to survive between training rounds — permanency matters. Filecoin handles this well through storage deals with configurable duration. You pay storage providers in FIL to store content for a defined period, and the network cryptographically verifies they're keeping their end of the deal.
+The practical bridge
+You don't have to choose immediately. Lighthouse, Web3.Storage, and Storacha all offer Filecoin-backed IPFS pinning with APIs similar to what you're likely using with Filebase now. Migration would be relatively low friction.
+One consideration
+Filecoin retrieval can be slower than Filebase depending on the provider. For model weights that are written once and read during aggregation rounds that's probably fine — latency on retrieval matters less than permanency and trustlessness.
+Worth exploring as a natural next step given your architecture. Want me to draft a technical note comparing the two for your documentation?
+
+I imagine the model_owner will pay for this as a part of the network fee in the future. (edited) 
+4 replies
+
+abraham nash  [9:05 PM]
+Filecoin storage cost
+Filecoin costs approximately $0.19 per TB per month — making it the cheapest decentralised storage option available. For your use case, model weight updates are tiny — typically kilobytes to low megabytes per client update. You are nowhere near TB scale for a long time.
+What this means in real numbers
+If you have 100 validators each pushing 10MB model updates per training round, that's 1GB per round. At Filecoin's pricing that's roughly $0.0002 per round. Essentially negligible.
+How it gets paid via network fee
+The flow would be simple. Model owner pays a network fee to initiate a training job. A small portion of that fee — tiny, fractions of a cent per round — is routed automatically to cover Filecoin storage deals for that job's client updates. The smart contract handles the routing. No client ever pays directly.
+This fits cleanly into your P3 tokenomics design — the fee mechanism you're already building covers storage as a line item without anyone noticing it exists.
+Honest bottom line
+Keep Filebase for now — it's free and the storage costs at your current scale are so small they're rounding errors. But when you design the fee mechanism in P3, build Filecoin storage costs in from the start. The numbers are so low they'll never be a meaningful burden on model owners. (edited) 
+Umer  [9:08 PM]
+Thanks @abraham nash I will explore filecoin and follow on this
+Umer  [8:49 PM]
+https://manus.im/share/file/48a96a47-403b-436b-b8f1-187af4490d71
+manus.im
+Filebase vs. Filecoin: A Comparative Analysis for IPFS Uploads - Manus
+Manus is the action engine that goes beyond answers to execute tasks, automate workflows, and extend your human reach.
+
+abraham nash  [12:35 AM]
+Great summary, @Umer
+
+Pros
+• Trustlessness: The decentralized nature and cryptographic proofs ensure that data is stored without relying on a single trusted third party.
+• Verifiable Storage: PoRep and PoST provide strong guarantees that data is indeed being stored and is accessible.
+• Cost-Effective for Long-Term Storage: Filecoin can be very cost-effective for long-term storage, with costs as low as approximately $0.19 per TB per month 
+• Thecost for small updates (e.g., 1GB per round for 100 validators pushing 10MB updates) is negligible, around $0.0002 per round 
+
+Cons
+•Retrieval Latency: Retrieval of data from Filecoin can sometimes be slower than from centralized services like Filebase, depending on the storage provider
+. However, for data that is written once and read less frequently, this might not be a significant issue.
+•Complexity: Integrating directly with Filecoin can be more complex than using an S3-compatible service like Filebase, as it involves managing storage deals and FIL cryptocurrency.
+
+I think because of its decentralized nature, it meets our requirements for fully decentralized system at InfiniteZero!
