@@ -24,6 +24,7 @@ holding live, untracked findings does **not** qualify — see §4.
 | `ci-next-02-lint-promotion-plan.md` | `ruff` config + cleanup + promotion (Phase 1 PR 3) | rev 2 — ready |
 | `ci-next-03-timestamp-escalation-plan.md` | BL-25 + issue for the OP-Stack timestamp question | rev 2 — ready |
 | `ci-next-04-forge-fmt-plan.md` | `forge fmt` + `--check` step (Phase 1 PR 4) | rev 1 — ready |
+| `testnet-readiness/` | Prep packet for the 2026-09-18 testnet-readiness meeting (discussion #132): overview, node software status, hardware measurement plan, key fixes, docs inventory, audit | rev 2 + review corrections — ready for the meeting |
 
 Phase 1 of the CI series (`archive/ci-cd-phase1-plan.md`) defined four PRs. PRs 1 and 2 shipped as
 #103 and #118. **PR 3 is `ci-next-02`, PR 4 is `ci-next-04`** — both were carried forward rather than
