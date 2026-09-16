@@ -1,15 +1,18 @@
 # `Plans/` archive index
 
-`Plans/` is **not tracked by Git** — it is excluded locally via `.git/info/exclude`, and
-`git log --all -- Plans` is empty. Nothing in this folder has ever been committed, on any ref.
+`Plans/` is a `git worktree` on the orphan branch **`plans`**, pushed to `origin` (the
+`Santiagocetran/DevNet` fork) only — never `upstream`, never merged into anything. Working rules
+for the branch itself are in [`CLAUDE.md`](CLAUDE.md). Until 2026-09-15 this folder was untracked
+and nothing in it had been committed; `plans` starts at `ee0fdc7` with the tree as it stood then, so
+**history before that commit exists only in this file.**
 
-That has a consequence worth stating plainly: **moves, deletions and the reasoning behind them leave
-no trace anywhere else.** There is no `git log` to reconstruct why a file went to `archive/`. This
-file is the substitute. Anything moved into `archive/` gets a row here, with the date and the reason,
-at the time of the move — otherwise the archive decays into a folder nobody trusts.
+Git now records *that* a file moved. It does not record *why*, or whether the move was honest — and
+that is what decays. So this file stays the index: anything moved into `archive/` gets a row here,
+with the date and the reason, **in the same commit as the `mv`** — otherwise the archive decays into
+a folder nobody trusts.
 
 **Archive status means one of three things:** completed, superseded, or tracked elsewhere. A document
-holding live, untracked findings does **not** qualify — see §3.
+holding live, untracked findings does **not** qualify — see §4.
 
 ---
 
@@ -46,14 +49,26 @@ on 2026-09-15 and verified to resolve. **Any future move must do the same sweep*
 turns into a pile of dead links:
 
 ```bash
-grep -rn 'Plans/[A-Za-z0-9_.-]*\.\(md\|sol\)' Plans/archive/ | grep -v 'Plans/archive/'
+# from the DevNet root: every Plans/<file> reference anywhere, resolved against disk
+grep -rnoI --exclude-dir={.git,.venv,node_modules,lib} 'Plans/[A-Za-z0-9_./-]*\.\(md\|sol\)' . \
+  | while IFS=: read -r src line ref; do [ -e "$ref" ] || echo "$src:$line  $ref"; done
 ```
 
-Expected output: empty.
+Expected output: empty. The sweep covers the whole working tree, not just `archive/`. On 2026-09-15
+it only scanned `Plans/archive/`, and that missed the six dead references in the root-level
+`AUDIT_HANDOFF.md` (fixed on 2026-09-16, §3).
 
 ---
 
-## 3. Archived files that still contain live findings
+## 3. Moves made 2026-09-16
+
+| File | Reason |
+|---|---|
+| `AUDIT_HANDOFF.md` | Was at the repo root, untracked (in `.git/info/exclude`), dated 2026-07-03. A handoff brief for a fresh audit of `task_300626_3` on `feat/validator-readiness`; it said of itself "delete … once the audit is done". Completed: Part 1 merged to `develop` via PR #16 (`dc6ff23`, `c12b9e1`). Its one substantive finding, Lighthouse retrieval returning HTTP 402, is tracked elsewhere, in `Developer/discussion/add-filecoin-support.md` (marked superseded, `70fef30`) and `Developer/tasks/task_060726_4.md`. Archived instead of deleted, because it had never been committed and deleting it would have lost it for good. Its six `Plans/<file>` references were rewritten to `Plans/archive/<file>`, and its `.git/info/exclude` entry was removed. |
+
+---
+
+## 4. Archived files that still contain live findings
 
 **`archive/followups-tracking-note.md`** — archived before 2026-09-15 (dated 2026-08-01), not part of
 that day's moves, but it does not meet the archive bar and should be resolved:
@@ -73,9 +88,10 @@ location only.
 
 ---
 
-## 4. Rules for the next move
+## 5. Rules for the next move
 
-1. Add the row here, with the date and the reason, in the same change as the `mv`.
+1. Use `git mv`, and add the row here with the date and the reason **in the same commit**. Push
+   `plans` afterwards — an unpushed move exists on one machine only.
 2. Run the reference sweep in §2 and repair anything it finds.
 3. Confirm the file is genuinely completed, superseded, or tracked elsewhere. If it holds a live
    finding, file the backlog row or issue **first** and link it — then archive.
