@@ -1,6 +1,8 @@
 name: CI concurrency proof
 
 on:
+  pull_request:
+    branches: [ci/verify-concurrency-168]
   push:
     branches: [ci/verify-concurrency-168]
 
