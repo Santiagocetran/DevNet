@@ -5,8 +5,11 @@
 **Origin:** `Plans/archive/ci-cd-phase1-plan.md` §7, follow-up bullet 6 ("`CODEOWNERS`, a PR template, and
 Dependabot for `github-actions` and `npm` … Dependabot is what stops the pinned SHAs in §2.9 from
 silently rotting")
-**Status:** rev 2 — rev 1 (2026-09-15) had one blocking defect and one self-contradiction, both found
-in review and both confirmed against the tree. Fixed here; see the changelog.
+**Status:** rev 3 — implementation scope unchanged; priority reconciled with the 2026-09-24 push-CI plan.
+
+> **Rev 3 changelog (2026-09-24, Astra audit of `ci-next-05`).** §0 no longer recommends Dependabot
+> as the first CI follow-up. The agreed first PR is `ci-next-05`'s `develop` push trigger because recent
+> landed revisions have no CI record. Dependabot remains independent and can follow immediately.
 
 > **Rev 2 changelog.**
 >
@@ -36,13 +39,14 @@ in review and both confirmed against the tree. Fixed here; see the changelog.
 
 | # | Plan | Needs someone else's judgement? | Blocking on anything? |
 |---|---|---|---|
-| **1** | **This one — Dependabot** | **No** | **No** |
-| 2 | `ci-next-02-lint-promotion-plan.md` | No | Needs BL-25 + issue from plan 3 filed first (for the cross-reference only) |
-| 3 | `ci-next-03-timestamp-escalation-plan.md` | **Yes — a Solidity/security reviewer** | No |
-| 4 | `ci-next-04-forge-fmt-plan.md` | No | No |
+| **1** | **`ci-next-05-develop-push-and-completion-plan.md` — push coverage** | **No** | **No** |
+| 2 | **This one — Dependabot** | **No** | **No; independent of push coverage** |
+| 3 | `ci-next-02-lint-promotion-plan.md` | No | Needs BL-25 + issue from the timestamp plan filed first (for the cross-reference only) |
+| 4 | `ci-next-03-timestamp-escalation-plan.md` | **Yes — a Solidity/security reviewer** | No |
+| 5 | `ci-next-04-forge-fmt-plan.md` | No | No |
 
-Still recommended first: smallest, no dependencies, and the only one that is *currently getting worse
-on its own*.
+`ci-next-05` is first by the 2026-09-24 decision, not a technical dependency: this Dependabot PR can
+be prepared in parallel and does not wait for lint, formatting or integration.
 
 ---
 

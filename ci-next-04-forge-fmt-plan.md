@@ -4,11 +4,18 @@
 **Branch:** `ci/phase1-forge-fmt`, cut from `develop`
 **Origin:** `Plans/archive/ci-cd-phase1-plan.md` §3.4 — "PR 4 of 4" of the Phase 1 series. Independent
 of PR 3; needs only PR 2 (#118, merged).
-**Status:** rev 1 — written 2026-09-15. This plan exists because PR 4 was carried in the archived Phase
-1 plan and had no successor: `ci-next-02` covers PR 3 and merely *mentioned* that PR 4 was unopened,
-which left real scope in an archived document. **Every number below is unmeasured** — `forge` is not
-installed in the environment this was written in. The archived plan's measurement (§3.4, Aug 2026) was
-`forge fmt --check` exiting 1 across **20 files**. Re-measure before opening (§3 step 1).
+**Status:** rev 2 — corrected the compiled-output verification after the 2026-09-24 Astra audit.
+This plan exists because PR 4 was carried in the archived Phase 1 plan and had no successor:
+`ci-next-02` covers PR 3 and merely *mentioned* that PR 4 was unopened. **Every file-count estimate
+below is unmeasured** — `forge` was not installed in the environment this was written in. The archived
+plan's measurement (§3.4, Aug 2026) was `forge fmt --check` exiting 1 across **20 files**.
+Re-measure before opening (§3 step 1).
+
+> **Rev 2 changelog (2026-09-24, Astra audit).** The rev 1 `forge build --sizes` check was described as
+> evidence of semantic equivalence. Equal sizes can hide changed code, while a whitespace-only change
+> can change Solidity's embedded metadata and raw bytecode hash. §3 now requires a source-diff review,
+> unchanged ABI/storage layout, and a runtime-bytecode comparison that accounts for metadata and
+> link/immutable references. A size table remains a diagnostic, not proof.
 
 ---
 
@@ -83,10 +90,15 @@ wanted, that is Prettier + `prettier-plugin-solidity` and a different PR.
    forge test          # expect: identical pass count to the pre-format run
    ```
    Capture the pre-format `forge test` count first so "identical" is checkable rather than asserted.
-3. **Bytecode equivalence, if it is cheap to get.** `via_ir = true` (`foundry.toml`), so output is not
-   trivially comparable across runs, but a matching `forge build --sizes` table before and after is
-   good evidence that nothing semantic moved. Treat a mismatch as a blocker and investigate — a
-   formatter should never change compiled size.
+3. **Check the source and compiled interface under identical settings.** Use isolated pre-format and
+   post-format worktrees with the same pinned Forge/solc versions, submodule commits, npm lockfiles and
+   `foundry.toml`. Review the complete source diff for lexical/whitespace-only changes. Compare each
+   changed contract's ABI and normalized storage layout. Compare executable deployed runtime bytecode
+   after decoding/removing compiler metadata and accounting for link and immutable references; do not
+   strip a guessed fixed number of trailing bytes. Investigate any remaining difference before calling
+   the format semantically inert. A `forge build --sizes` table can help diagnose a difference, but
+   **equal sizes are not an equivalence test**. Raw bytecode hashes may change solely because Solidity
+   embeds source-dependent metadata.
 4. **Idempotence.** Run `forge fmt` a second time; it must produce no diff. If it does, the formatter
    and the config disagree and the gate will flap.
 5. **The gate passes on the formatted tree** and fails on an unformatted one — test the failure on a
@@ -114,8 +126,10 @@ wanted, that is Prettier + `prettier-plugin-solidity` and a different PR.
 > **Blocking immediately, no advisory period** — unlike `forge lint` and `ruff`, this backlog is
 > cleared by commit 1 of this same PR, so there is nothing left to be advisory about.
 >
-> **Semantic inertness:** `forge test` pass count identical before and after (N passing), and
-> `forge build --sizes` unchanged. `hardhat/` is untouched — different toolchain, different formatter.
+> **Semantic inertness:** the complete source diff is formatting-only; tests pass with the same count;
+> ABI and normalized storage layout are unchanged; executable deployed runtime bytecode matches after
+> accounting for metadata and link/immutable references. `hardhat/` is untouched — different
+> toolchain, different formatter.
 
 ---
 
