@@ -3,7 +3,7 @@
 **Base:** `develop` @ `5f610c79063eef622acbe3a0997930a5d5204c14`; upstream refreshed and matched before implementation on 2026-10-21.
 **Branch:** `fix/265-local-transaction-info`; local commit `cfbfaccc719d6505795d0607c019b47a812f9168`.
 **Origin:** [implementation plan](issue-265-01-local-transaction-info-plan.md), [issue #265](https://github.com/InfiniteZeroFoundation/DevNet/issues/265), and user authorization to implement using Sol 6.1 subagents at low reasoning effort.
-**Status:** implemented, reviewed, and validated locally. Implementation branch has not been pushed; no PR created.
+**Status:** implemented, reviewed, and validated. Branch pushed to the fork and [PR #269](https://github.com/InfiniteZeroFoundation/DevNet/pull/269) opened against upstream `develop` on 2026-10-21 with explicit user approval and the reviewed PR body. Astra's independent implementation audit found no defects or blockers and independently reran the 15 focused tests successfully.
 
 **Changes.** Removed only the bundled local explorer field. `print_tx_info` now prints the hash without loading metadata when URL output is disabled, safely looks up optional network/explorer metadata otherwise, omits absent/empty/null explorer links, and strips trailing slashes from configured bases before appending the transaction path. Existing hash rendering, output labels, callers, transaction submission, and receipt handling remain unchanged.
 

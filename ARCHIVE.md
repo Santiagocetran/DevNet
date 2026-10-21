@@ -20,7 +20,7 @@ holding live, untracked findings does **not** qualify — see §4.
 
 | File | Covers | Status |
 |---|---|---|
-| `issue-265-01-local-transaction-info-plan.md`, `issue-265-01-local-transaction-info-summary.md` | Issue #265: correct local explorer configuration, optional transaction links, receipt-checking regression | rev 3 — implemented locally as `cfbfacc`; validated; upstream PR pending |
+| `issue-265-01-local-transaction-info-plan.md`, `issue-265-01-local-transaction-info-summary.md` | Issue #265: correct local explorer configuration, optional transaction links, receipt-checking regression | rev 4 — implemented as `cfbfacc`; validated and audited; upstream [PR #269](https://github.com/InfiniteZeroFoundation/DevNet/pull/269) open |
 | `ci-next-01-dependabot-plan.md` | Dependabot on `main`, targeting `develop` | rev 3 — ready; priority follows push CI |
 | `ci-next-02-lint-promotion-plan.md` | `ruff` config + cleanup + promotion (Phase 1 PR 3) | rev 2 — ready |
 | `ci-next-03-timestamp-escalation-plan.md` | BL-25 + issue for the OP-Stack timestamp question | rev 2 — ready |

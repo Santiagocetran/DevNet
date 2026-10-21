@@ -3,7 +3,9 @@
 **Base:** local `develop` @ `5f610c79063eef622acbe3a0997930a5d5204c14`, inspected 2026-10-21.
 **Branch:** this document belongs to the fork-only `plans` worktree. Implementation branch: `fix/265-local-transaction-info`, based on refreshed upstream `develop` at the stated Base, never on `plans`. Implementation commit: `cfbfaccc719d6505795d0607c019b47a812f9168`.
 **Origin:** [issue #265](https://github.com/InfiniteZeroFoundation/DevNet/issues/265), finding 2 and Umer's response in [discussion #260](https://github.com/InfiniteZeroFoundation/DevNet/discussions/260), and the user's request for an implementation plan following the investigation.
-**Status:** rev 3 — implemented and validated on 2026-10-21 using two Sol 6.1 subagents at low reasoning effort. Implementation is committed locally; no implementation branch push or PR created. See [implementation summary](issue-265-01-local-transaction-info-summary.md).
+**Status:** rev 4 — implemented, validated, and published as [PR #269](https://github.com/InfiniteZeroFoundation/DevNet/pull/269) against upstream `develop` on 2026-10-21 after user approval. See [implementation summary](issue-265-01-local-transaction-info-summary.md).
+
+> **Rev 4 changelog (2026-10-21, PR publication).** Astra independently audited the implementation with no findings and reran the 15 focused tests. User reviewed the PR body and diff, then authorized publication. Pushed the implementation branch to the fork and opened upstream PR #269 with the approved body.
 
 > **Rev 3 changelog (2026-10-21, implementation).** Refreshed upstream `develop` matches the original Base. Production changes and tests were authored in parallel in separate files. Baseline regression run: 10 failed, 5 passed; fixed run: 15 passed; nearby tests: 52 passed; full non-integration suite: 489 passed, 133 deselected. Final read-only subagent review found no correctness gaps. Recorded the implementation commit and validation environment in the sibling summary.
 
