@@ -20,7 +20,7 @@ holding live, untracked findings does **not** qualify — see §4.
 
 | File | Covers | Status |
 |---|---|---|
-| `issue-265-01-local-transaction-info-plan.md` | Issue #265: correct local explorer configuration, optional transaction links, receipt-checking regression | rev 1 — ready for review; planning only |
+| `issue-265-01-local-transaction-info-plan.md` | Issue #265: correct local explorer configuration, optional transaction links, receipt-checking regression | rev 2 — Astra audit incorporated; implementation authorized |
 | `ci-next-01-dependabot-plan.md` | Dependabot on `main`, targeting `develop` | rev 3 — ready; priority follows push CI |
 | `ci-next-02-lint-promotion-plan.md` | `ruff` config + cleanup + promotion (Phase 1 PR 3) | rev 2 — ready |
 | `ci-next-03-timestamp-escalation-plan.md` | BL-25 + issue for the OP-Stack timestamp question | rev 2 — ready |

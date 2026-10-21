@@ -3,7 +3,9 @@
 **Base:** local `develop` @ `5f610c79063eef622acbe3a0997930a5d5204c14`, inspected 2026-10-21.
 **Branch:** this document belongs to the fork-only `plans` worktree. Proposed implementation branch: `fix/265-local-transaction-info`, based on refreshed upstream `develop`, never on `plans`.
 **Origin:** [issue #265](https://github.com/InfiniteZeroFoundation/DevNet/issues/265), finding 2 and Umer's response in [discussion #260](https://github.com/InfiniteZeroFoundation/DevNet/discussions/260), and the user's request for an implementation plan following the investigation.
-**Status:** rev 1 — ready for review; planning only. No implementation changes or full application tests performed.
+**Status:** rev 2 — Astra audit incorporated; implementation authorized by the user on 2026-10-21 using Sol 6.1 subagents at low reasoning effort. Validation results will be recorded after implementation.
+
+> **Rev 2 changelog (2026-10-21, Astra audit).** No blockers found. Clarified exact hash-format compatibility, the remaining post-broadcast error path for malformed/unreadable configuration, and shared console capture for the transaction regression. Run the transaction-flow regression against the original implementation along with the display tests. Production changes and tests may be authored in parallel in separate files; preserve baseline evidence before accepting the combined fix.
 
 **Outcome.** Local transactions print their hash without the incorrect Optimism Sepolia link. Networks with a configured explorer retain their links. Missing explorer metadata must not interrupt receipt checking after broadcast.
 
@@ -44,8 +46,8 @@
    - Exercise the real packaged config for local and OP Sepolia behavior; use the original loader and do not save or modify package config. Assert local has no bundled explorer and OP Sepolia retains its configured base.
    - Verify a custom local explorer is honored; do not encode a blanket local-network prohibition.
    - Verify `print_url=False` does not call `load_din_info` by supplying a loader stub that raises if called.
-   - Exercise string, `bytes`, and Web3-style `HexBytes` hash inputs against existing formatting behavior. Use a full-length transaction hash and check that the printed hash and URL suffix agree.
-   - Run this file against the original implementation and record the expected failures before applying the fix.
+   - Exercise string, `bytes`, and Web3-style `HexBytes` hash inputs against existing formatting behavior. Strings remain unchanged; byte-like inputs retain their current `.hex()` rendering. Plain `bytes` produce no `0x`, and `HexBytes.hex()` behavior depends on the installed dependency version. Assert the exact expected hash and matching URL suffix; do not introduce `_hex0x` normalization in this issue.
+   - Include the transaction-flow regression specified in step 4 in this baseline run. Run this file against the original implementation and record the expected failures before accepting the combined fix. If authors work in parallel, use a temporary isolated copy of the original production files for this baseline; do not revert another agent's edits.
 
 3. Correct the configuration and output helper together.
    - Remove the `explorer` key from only the `local` JSON entry. Preserve addresses, chain IDs, CIDs, and the OP Sepolia explorer.
@@ -54,10 +56,10 @@
    - Resolve optional display metadata using safe lookups, conceptually `load_din_info().get(network, {}).get("explorer")`.
    - Return without printing a URL if the explorer is absent, empty, or null. For a configured base, remove a trailing slash before appending `/tx/<hash>`.
    - Add a concise docstring describing hash-only fallback. Retain the public signature and output labels.
-   - Do not add a broad exception handler: unreadable or malformed configuration files remain separate errors, outside this missing-metadata fix. General URL validation, arbitrary wrong JSON types, and automatic explorer-to-chain verification are outside scope.
+   - Do not add a broad exception handler. Unreadable/malformed configuration and invalid metadata types retain existing exception behavior, including the existing post-broadcast error path; this change guarantees fallback for absent metadata only. General URL validation, arbitrary wrong JSON types, and automatic explorer-to-chain verification are outside scope.
 
 4. Add one transaction-flow regression in the same test file.
-   - Use the real `build_and_send_tx` and real `print_tx_info`, with minimal mocked context, contract function, account, and Web3 calls. Use a local entry without an explorer.
+   - Use the real `build_and_send_tx` and real `print_tx_info`, with minimal mocked context, contract function, account, and Web3 calls. Use a local entry without an explorer. Return the same captured Rich console from the fake context that is patched into `utils.console`: the two functions otherwise obtain their consoles differently.
    - Make broadcast return a known hash and receipt waiting return a status-1 receipt.
    - Assert broadcast occurs once, receipt waiting receives that hash, the original receipt is returned, success is printed, and neither an explorer URL nor the transaction-failure message appears.
    - Keep the fixture isolated; no real wallet, RPC, funds, deployment, or package-config writes. No duplicate integration fixture is needed for every buy/stake caller.
