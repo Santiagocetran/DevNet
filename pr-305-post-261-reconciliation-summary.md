@@ -2,7 +2,7 @@
 
 **Base:** upstream develop `cf80216`; original PR head `2c1fa4c`.
 **Branch:** `fix/pr305-post261` in `/tmp/devnet-pr305-reconcile`.
-**Status:** implemented locally; not merge-ready. No code pushed.
+**Status:** implemented locally as merge commit `1b09d10`; not merge-ready. No code pushed.
 
 Astra audited the plan and rechecked the implementation. All six corrections are incorporated: current Foundry deployment examples, narrow getter error handling, explicit bootstrap scope, second registry-read failure coverage, focused live deployment validation and a repeatable Solidity CI artifact gate.
 
@@ -30,3 +30,5 @@ Astra audited the plan and rechecked the implementation. All six corrections are
 - `DINTaskAuditor`: `bafybeicbi42qmpcr7p2xtlpllrqfq3pmefcn6zxp4xh4rciieeu4dojrim`; 102,111 bytes; SHA-256 `6a302ca306ef3034c4f667d996771fe4612ba62acde9caa62371eaa2b6021869`. Recursive local pin confirmed and fresh downloaded bytes matched.
 
 No runtime contract logic was changed beyond the original #305 implementation. New Solidity work is test coverage only. Original #305 guard semantics, fee policy, dormant S6 storage/API, canonical-wiring trust boundary and existing-deployment caveats are preserved.
+
+Final local implementation head: `33d5f83` after whitespace-only cleanup of `deploy.py`; merge commit remains `1b09d10`. Implementation worktree is clean. Final diff against upstream passes whitespace checks and the artifact gate still passes. Temporary Anvil and offline Kubo services have been stopped; evidence and local pin repository remain in `/tmp`.
