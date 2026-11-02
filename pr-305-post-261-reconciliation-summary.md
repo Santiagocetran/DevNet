@@ -2,33 +2,44 @@
 
 **Base:** upstream develop `cf80216`; original PR head `2c1fa4c`.
 **Branch:** `fix/pr305-post261` in `/tmp/devnet-pr305-reconcile`.
-**Status:** implemented locally as merge commit `1b09d10`; not merge-ready. No code pushed.
+**Head:** `e8e7349` (unpublished); merge reconciliation `1b09d10`, whitespace cleanup `33d5f83`.
+**Status:** implementation and Astra P2 fix complete; locally validated. Persistent IPFS publication and remote CI/reviews remain outstanding.
 
-Astra audited the plan and rechecked the implementation. All six corrections are incorporated: current Foundry deployment examples, narrow getter error handling, explicit bootstrap scope, second registry-read failure coverage, focused live deployment validation and a repeatable Solidity CI artifact gate.
+## Result
 
-## Remaining acceptance items
+Reconciled #261's model-ID safety and reference artifacts with #305's future-GI guard and constructor compatibility. Preserved #254 and all unrelated develop changes. Regenerated both cache artifacts/manifest references, added post-build ABI/creation-bytecode parity checks, repaired inherited tests and deployment examples, and added second-registry-read atomicity coverage.
 
-1. Publish both regenerated artifacts persistently to a reachable IPFS provider and verify retrieval independently. The local offline pin evidence below is not public availability evidence. Keep those bytes fixed; if bytes change, regenerate/re-pin and update the manifest again.
-2. Resolve or separately disposition the upstream #254 metadata-test race. Two test suites call `vm.setEnv("DEPLOYMENTS_NETWORK", ...)` with different file names. Full Foundry failed the deployment metadata read; that test passes alone. Neither script/test was changed by this reconciliation.
-3. Fresh remote CI and eligible peer/contract/mechanism reviews on the eventual pushed head. Outstanding changes-requested review needs an updated verdict. Bootstrap default-manifest/default-ABI publication stays separate.
+The independent Astra audit then reproduced incompatible official pairings. Commit `e8e7349` fixes that P2 with a pure coordinator `taskProtocolVersion() == 1` getter and CLI compatibility preflight before auditor construction, transaction submission, address writes or one-shot pairing. Version 1 requires the registry-aware four-argument auditor. Released legacy families must also match: no-model-ID coordinators pair with two-argument auditors; model-ID coordinators pair with three-argument auditors. Unknown/mixed versions reject, and unrelated RPC failures propagate.
 
-## Validation evidence
+This is official-artifact compatibility checking, not proof of trusted custom code or canonical registry wiring. GI guard semantics, fee policy and dormant S6 storage/API remain unchanged. The new getter introduces no storage slots.
 
-- Python: 721 passed, 133 integration tests deselected; `/tmp/pr305-python-tests-unsandboxed.log`.
-- Targeted deployment/artifact-check tests: 48 passed.
-- Foundry: 526 passed / 1 inherited failure / 0 skipped; `/tmp/pr305-foundry-tests.log`.
-- Isolated metadata retry: 1 passed; `/tmp/pr305-metadata-retry.log`.
-- RewardEngine: 40 passed; `/tmp/pr305-reward-tests.log`.
-- Artifact parity and size gate passed. Coordinator 23,387 B runtime (1,189 B margin); auditor 21,885 B (2,691 B margin).
-- Docs: 294 inline relative link targets resolve. Whitespace and Python syntax checks pass.
-- Real Typer/loader/transaction-builder smoke: `/tmp/pr305-live-smoke.py`, `/tmp/pr305-live-smoke.log`, `/tmp/pr305-live-smoke-results.json`. Uses isolated Anvil, public dev accounts, temporary `.env`; only the runtime network/configuration lookup and sleep are substituted. No chain transaction or receipt is mocked.
-- Actual provider upload / empty-cache retrieval: `/tmp/pr305-ipfs-verify.py`, `/tmp/pr305-ipfs-verify.log`, `/tmp/pr305-ipfs-receipts.json`. IPFS repo `/tmp/pr305-ipfs` is offline and local only.
+## Final validation
 
-## Local artifact receipts (not persistent publication)
+| Check | Result | Evidence |
+|---|---|---|
+| Full Python excluding integration | **735 passed**, 133 deselected | `/tmp/pr305-version-python-final.log` |
+| Focused deployment/artifact tests | **62 passed**, independently repeated by Astra | [fix recheck](/tmp/pr305-implementation-audit/fix-recheck.md) |
+| Clean full Foundry | **527 passed**, 0 failed, 0 skipped; 40 suites | `/tmp/pr305-version-clean-foundry.log` |
+| Actual Typer/loader/transaction-builder smoke | **16 cases passed**; all 8 mixed pairs reject with 0 transactions, unchanged `.env`, unset pairing; 4 matching direct/cache/previous-Foundry/Hardhat pairs succeed | `/tmp/pr305-version-live.py`, `/tmp/pr305-version-evidence/results.json` |
+| ABI and creation-bytecode parity | Both cache and both bundled ABIs match clean build | `.github/scripts/check_task_artifacts.py` |
+| Runtime size gate | Coordinator 23,425 B / 1,151 B margin; auditor 21,885 B / 2,691 B margin | current build + size gate |
+| Coordinator storage | 43 entries unchanged, including slot/offset/label and recursively normalized types | `/tmp/pr305-version-storage-check.txt` |
+| Documentation / whitespace | 294 relative link targets resolve; PR diff whitespace check passes | repository checks |
+| Fresh local IPFS retrieval | Exact regenerated bytes match after provider upload/pin and empty-cache `ensure_file_exists` retrieval | `/tmp/pr305-version-ipfs-receipts.json`, `/tmp/pr305-version-ipfs.log` |
 
-- `DINTaskCoordinator`: `bafybeigmde3cggcas75ux3yezjmjsefho6obqlpqyl7qpyv6nhd6az5kum`; 103,683 bytes; SHA-256 `6c67b4cb8329b06e51c25331a39b6a23dfbd065458b9ed21686ba07787421e9f`. Recursive local pin confirmed and fresh downloaded bytes matched.
-- `DINTaskAuditor`: `bafybeicbi42qmpcr7p2xtlpllrqfq3pmefcn6zxp4xh4rciieeu4dojrim`; 102,111 bytes; SHA-256 `6a302ca306ef3034c4f667d996771fe4612ba62acde9caa62371eaa2b6021869`. Recursive local pin confirmed and fresh downloaded bytes matched.
+Astra's [full audit](/tmp/pr305-implementation-audit/report.md) describes the original finding. Its [focused fix recheck](/tmp/pr305-implementation-audit/fix-recheck.md) confirms the P2 is addressed and found no concrete new defect.
 
-No runtime contract logic was changed beyond the original #305 implementation. New Solidity work is test coverage only. Original #305 guard semantics, fee policy, dormant S6 storage/API, canonical-wiring trust boundary and existing-deployment caveats are preserved.
+## Remaining acceptance
 
-Final local implementation head: `33d5f83` after whitespace-only cleanup of `deploy.py`; merge commit remains `1b09d10`. Implementation worktree is clean. Final diff against upstream passes whitespace checks and the artifact gate still passes. Temporary Anvil and offline Kubo services have been stopped; evidence and local pin repository remain in `/tmp`.
+1. **Persistent artifact publication.** Offline Kubo pin/retrieval proves integrity only. Publish exact bytes to a reachable persistent provider and verify independently before merging the new manifest CIDs. `cache-default-artifacts` bootstrap CIDs remain separate and unchanged.
+2. **Remote checks and reviews.** Push the implementation only when ready, obtain fresh required checks and eligible peer/contract/mechanism sign-offs, and supersede outstanding changes requested. No implementation branch push, GitHub comment/review or issue closure was performed here.
+3. **Historical #254 test flakiness.** The latest clean full suite passes, including both metadata tests. Their process-wide `DEPLOYMENTS_NETWORK` race was observed in earlier reconciliation validation and has not been fixed by this work; keep it separately tracked.
+
+A preparatory incremental Foundry run found duplicate compiler build-info files. Generated outputs were moved to `/tmp/pr305-version-incremental-build`, then rebuilt cleanly; the clean final suite above passes. This was a build-state issue, and no production change was made to mask it.
+
+## Final local artifact receipts (not persistent publication)
+
+- Coordinator: `bafybeif7fay4vgal4vb6ojsspc4e6muyyujuveyutszlf7z4mfb5uxkteu`; 104,022 bytes; SHA-256 `e6287cbf75f984fd705c3d6937b02f31a1cee1c7b868e765a3b08f522129cbd6`.
+- Auditor: `bafybeicbi42qmpcr7p2xtlpllrqfq3pmefcn6zxp4xh4rciieeu4dojrim`; 102,111 bytes; SHA-256 `6a302ca306ef3034c4f667d996771fe4612ba62acde9caa62371eaa2b6021869`.
+
+Both recursive pins and fresh retrieved bytes matched on the isolated local Kubo v0.43.1 node. The services are stopped; repository `/tmp/pr305-ipfs` and evidence remain local. Temporary metadata output files are retained in `/tmp/pr305-version-evidence/generated-deployments`; reusable npm dependency symlink is `/tmp/pr305-version-evidence/npm-dependencies`.

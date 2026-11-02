@@ -3,7 +3,9 @@
 **Base:** upstream `develop` at `cf80216` (PR #254 after #261), PR #305 at `2c1fa4c`.
 **Branch:** `fix/pr305-post261`, isolated checkout `/tmp/devnet-pr305-reconcile`.
 **Origin:** PR #305 / issue #224; user-requested Astra audit and implementation.
-**Status:** rev 3 — reconciliation implemented locally; persistent IPFS publication and inherited #254 test race remain outstanding.
+**Status:** rev 4 — P2 pairing fix implemented and independently rechecked by Astra; persistent IPFS publication and remote CI/reviews outstanding. Historical #254 metadata race remains unfixed.
+
+> Rev 4 changelog — the independent Astra implementation audit reproduced both mixed official task generations: a guarded coordinator with an old auditor cannot start GIs; an old coordinator with a guarded auditor bypasses disable. Add a pure `taskProtocolVersion()` getter (version 1) to the guarded coordinator, require version 1 for four-argument auditors and unversioned legacy coordinators for legacy auditors, reject unknown versions, and preserve model-ID checks. Missing-code checks and all generation rejection precede constructor invocation, transactions, saved addresses and pairing. No new storage or changes to GI guard semantics. Regenerate bytecode/ABIs/CIDs and recheck the coordinator size budget.
 
 > Rev 3 changelog — implementation and focused Astra recheck completed. The full Python suite and live CLI smoke pass. Full Foundry reports 526 passed / 1 inherited metadata-test failure; that failure passes alone and is consistent with competing process-wide environment overrides in #254. Local offline IPFS receipts prove integrity only; durable network publication and independent retrieval remain a release blocker. No remote PR changes are authorized by this record.
 
@@ -193,3 +195,28 @@ Detailed evidence and follow-up scope: [implementation summary](pr-305-post-261-
 Local implementation commit: `1b09d10` (`fix/pr305-post261`), unpushed. Temporary deployment outputs are preserved under `/tmp/pr305-evidence/generated-deployments`; reusable npm dependency symlink is `/tmp/pr305-tools/npm-dependencies`.
 
 Final local implementation head: `33d5f83` after whitespace-only cleanup of `deploy.py`; merge commit remains `1b09d10`. Implementation worktree is clean. Final diff against upstream passes whitespace checks and the artifact gate still passes. Temporary Anvil and offline Kubo services have been stopped; evidence and local pin repository remain in `/tmp`.
+
+### Rev 4 acceptance
+
+- Regression tests for both official mixed-generation directions, including the two-argument legacy auditor, must show no constructor, transaction, environment write or pairing side effects. Unknown versions reject; transport errors do not select a legacy fallback.
+- Live actual Typer/loader/transaction-builder smoke must reject mixed pairs without consuming nonce or changing `.env`, then allow the still-unpaired coordinator to pair with its matching auditor. Check direct Foundry, refreshed cache, previous Foundry and legacy Hardhat pairs.
+- A pure coordinator capability getter changes no storage; full contract build, ABI/creation-bytecode parity and size gate must pass. RewardEngine real-registry lifecycle tests must remain green. Known global-environment metadata race stays separate.
+- New manifest CIDs require fresh local integrity verification again and remain unavailable for merge until persistent IPFS publication and independent retrieval.
+
+### Rev 4 implementation progress
+
+- Added coordinator `taskProtocolVersion() == 1` and CLI generation preflight. Also reject mixing the two legacy families: a two-argument auditor cannot satisfy the later model-ID coordinator's reward-pool interface. Supported matching legacy deployments still succeed.
+- 62 focused Python tests pass. Actual Typer/loader/builder live smoke passes all 16 cases, including eight rejected mixed pairings with unchanged nonce and `.env`, and successful matching direct/cache/previous-Foundry/Hardhat pairs. Evidence: `/tmp/pr305-version-evidence/results.json`.
+- Clean Foundry build, regenerated artifact parity, size gate and all 294 relative documentation links pass. Coordinator runtime 23,425 B, margin 1,151 B; pure getter leaves all 43 storage entries unchanged (slot, offset, label and recursively normalized types compared against pre-version compiler output).
+- Regenerated coordinator reference artifact pinned and freshly retrieved locally; new CID `bafybeif7fay4vgal4vb6ojsspc4e6muyyujuveyutszlf7z4mfb5uxkteu`, SHA-256 `e6287cbf75f984fd705c3d6937b02f31a1cee1c7b868e765a3b08f522129cbd6`, 104,022 bytes. Auditor artifact unchanged. These remain offline integrity receipts, not persistent publication.
+- Initial incremental Foundry run exposed duplicate build-info files consumed by upgrades validation. Generated outputs were moved aside and a clean rebuild completed; final full-suite results follow below. No production code change was made to mask that build-state issue.
+
+Local fix commit: `e8e7349` (`fix/pr305-post261`), unpushed. Astra independently rechecked the fix: original P2 addressed, no concrete new defect, 62 targeted tests and actual artifact gate pass. Final Python: 735 passed / 133 integration tests deselected. All 16 live cases pass. Temporary Anvil and Kubo services stopped. Clean full Foundry suite is finishing; final result follows.
+
+### Rev 4 final validation
+
+Clean full Foundry suite: **527 passed / 0 failed / 0 skipped** across 40 suites, including both metadata-writing suites and the invariant suite (`/tmp/pr305-version-clean-foundry.log`). This supersedes the preparatory incremental-build failures. It does not claim to fix the historical #254 shared-environment race, which remains separate.
+
+Final local head: `e8e7349`; implementation worktree clean; no implementation push. Python **735 passed**, targeted **62 passed**, live CLI **16 cases passed** with all **8 mixed pairs rejected without transactions or address writes**. Exact artifacts, coordinator storage layout, size gate and 294 documentation links pass. Astra independently rechecked the P2 fix and found no concrete new defect. Remaining acceptance: persistent IPFS publication/independent retrieval and remote CI/eligible reviews.
+
+Temporary services are stopped. Generated deployment test files are retained in `/tmp/pr305-version-evidence/generated-deployments`; reusable npm dependency symlink is `/tmp/pr305-version-evidence/npm-dependencies` (restore to `foundry/node_modules` or use locked `npm ci` for future FFI tests).
